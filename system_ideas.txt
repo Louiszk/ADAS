@@ -1,0 +1,15 @@
+# initial start
+py main_meta.py --materialize --reinstall
+
+py main_meta.py --problem="The given agentic system should solve Project Euler tasks. It works, however its accuracy is not the best.
+    It only works well with simple Project Euler problems. Optimize the given agentic system slightly to achieve higher accuracy.
+    The system input is any Project Euler task, and the system output should be the solution. 
+    The system should be really generic, to solve any Project Euler problem." --name="BetterEulerSolver" --optimize-system="SimpleEulerSolver"
+
+py main_meta.py --problem="Please create a system that visualizes stock market data.
+    For any input text it should create a visualization of the last week's data for a stock using matplotlib and save it as a PNG.
+    " --name="VisualStockChecker"
+
+py main_meta.py --problem="Design me a simple research system. The core of the system should be an llm=LargeLanguageModel(wrapper='perplexity').
+    The wrapper='perplexity' specifies the perplexity api, which can search the web - no need for additional web requests. 
+    Decide on the other components yourself". --name="Researcher"
