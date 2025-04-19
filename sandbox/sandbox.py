@@ -1,5 +1,4 @@
 from llm_sandbox.docker import SandboxDockerSession
-from llm_sandbox.podman import SandboxPodmanSession
 import os
 import subprocess
 import json
@@ -42,7 +41,7 @@ class StreamingSandboxSession:
                 **kwargs
             )
         elif container_type == 'podman':
-            # For Podman, use direct image ID lookup
+            from llm_sandbox.podman import SandboxPodmanSession
             podman_image = image
             if image and not dockerfile and '/' not in image:
                 # Use fully qualified image name for podman
@@ -77,7 +76,7 @@ class StreamingSandboxSession:
         try:
             return self.session.open()
         except Exception as e:
-            if hasattr(self.session, 'image') and isinstance(self.session, SandboxPodmanSession):
+            if hasattr(self.session, 'image') and not isinstance(self.session, SandboxDockerSession):
                 # Handle podman-specific errors
                 if "image not known" in str(e) and isinstance(self.session.image, str):
                     if self.verbose:

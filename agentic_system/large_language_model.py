@@ -19,7 +19,8 @@ def parse_decorator_tool_calls(text):
         'create_node': 'function_code',
         'create_tool': 'function_code',
         'edit_component': 'new_function_code',
-        'add_conditional_edge': 'condition_code'
+        'add_conditional_edge': 'condition_code',
+        'helper': 'code'
     }
     
     # Extract code blocks
@@ -118,29 +119,18 @@ def execute_decorator_tool_calls(text):
             try:
                 result = LargeLanguageModel.available_tools[tool_name].invoke(tool_args)
                 
-                tool_messages.append(HumanMessage(
-                    content=str(result) if result else f"Tool {tool_name} executed successfully.",
-                    tool_call_id=tool_id,
-                    name=tool_name
-                ))
+                tool_messages.append(str(result) if result else f"Tool {tool_name} executed successfully.")
                 tool_results[tool_name] = result
             except Exception as e:
                 error_message = f"Error executing tool {tool_name}: {repr(e)}"
-                tool_messages.append(HumanMessage(
-                    content=error_message,
-                    tool_call_id=tool_id,
-                    name=tool_name
-                ))
+                tool_messages.append(error_message)
                 tool_results[tool_name] = error_message
         else:
-            error_message = f"Tool {tool_name} not found"
-            tool_messages.append(HumanMessage(
-                content=error_message,
-                tool_call_id=tool_id,
-                name="error"
-            ))
+            tool_messages.append(f"Tool {tool_name} not found")
+
+    human_message = HumanMessage(content = "\n\n".join(tool_messages)) if tool_messages else None
                 
-    return tool_messages, tool_results, tool_calls
+    return human_message, tool_results
 
 def execute_tool_calls(response):
     """Execute any tool calls in the llm response."""

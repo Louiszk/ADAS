@@ -53,6 +53,12 @@ You have these decorators available for designing the system:
             entry_point: Name of the node to set as entry point
             finish_point: Name of the node to set as finish point
     """
+@@helper()
+    """
+        Adds or updates helper functions and constants.
+        If a function or constant with the same name already exists, it will be replaced.
+            code: Python code containing functions and/or constants to add to the helper section
+    """
 @@test_system(state: Dict[str, Any])
     """
         Executes the current system with a test input state to validate functionality.
@@ -114,6 +120,7 @@ The code-related decorators include:
 - @@create_tool - Place the tool function implementation below it
 - @@add_conditional_edge - Place the router function implementation below it
 - @@edit_component - Place the new function implementation below it
+- @@helper - Place the functions and constants below it
 """
 
 chain_of_thought = """
@@ -159,7 +166,7 @@ A node is simply a Python function that processes state. There are two common pa
 # Example
 def agent_node(state):
     llm = LargeLanguageModel(temperature=0.4)
-    system_prompt = "..." # Task of that agent
+    system_prompt = SYSTEM_PROMPT_AGENT1 # Task of that agent, constant added to helpers.
     # Optionally bind tools that this agent can use
     # This will automatically instruct the agent based on the tools docstrings
     llm.bind_tools(["Tool1", "Tool2"])
@@ -231,6 +238,7 @@ Analyze the problem statement to identify key requirements, constraints and succ
 - All functions should be defined with 'def', do not use lambda functions.
 - The directed graph should NOT include dead ends or endless loops, where it is not possible to reach the finish point
 - The system should be fully functional, DO NOT use any placeholder logic in functions or tools
+- Keep the code organized and clean using helper functions and constants.
 
 For each step of the implementation process:
 - Analyze what has been implemented so far in the current code and what needs to be done next

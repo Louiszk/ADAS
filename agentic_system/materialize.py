@@ -59,6 +59,13 @@ def materialize_system(system, output_dir="systems"):
     
     code_lines.extend([
         "",
+        "# Helper functions and constants",
+        system.helper_code if system.helper_code else "# No helper functions or constants defined yet."
+        ""
+    ])
+    
+    code_lines.extend([
+        "",
         "",
         "def build_system():",
         "    # Define state attributes for the system",

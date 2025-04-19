@@ -283,6 +283,22 @@ def build_system():
 
     tools["SetEndpoints"] = tool(runnable=set_endpoints, name_or_callable="SetEndpoints")
 
+    # Tool: Helper
+    # Description: Adds or updates code in the helper file
+    def helper(code: str) -> str:
+        """
+            Adds or updates helper functions and constants. 
+            If a function or constant with the same name already exists, it will be replaced.
+                code: Python code containing functions and/or constants to add to the helper section
+        """
+        try:
+            target_system.add_helper_code(code)
+            return f"Helper code updated successfully"
+        except Exception as e:
+            return f"Error updating helper code: {repr(e)}"
+
+    tools["Helper"] = tool(runnable=helper, name_or_callable="Helper")
+
     # Tool: TestSystem
     # Description: Tests the target system with a given state
     def test_system(state: Dict[str, Any]) -> str:
@@ -292,52 +308,61 @@ def build_system():
         """
         all_outputs = []
         error_message = ""
-    
+        stdout_capture = io.StringIO()
+        
         try:
             if not (target_system.entry_point and target_system.finish_point):
                 raise Exception("You must set an entry point and finish point before testing")
-    
+
             source_code = materialize_system(target_system, None)
             namespace = {}
-            exec(source_code, namespace, namespace)
-    
-            if 'build_system' not in namespace:
-                raise Exception("Could not find build_system function in generated code")
-    
-            target_workflow, _ = namespace['build_system']()
-            pbar = tqdm(desc="Testing the System")
-    
-            for output in target_workflow.stream(state, config={"recursion_limit": 20}):
-                cleaned_messages = []
-                if "messages" in output:
-                    for message in output["messages"]:
-                        cleaned_message = getattr(message, 'type', 'Unknown') + ": "
-                        if hasattr(message, 'content') and message.content:
-                            cleaned_message += message.content
-                        if hasattr(message, 'tool_calls') and message.tool_calls:
-                            cleaned_message += str(message.tool_calls)
-                        if not hasattr(message, 'content') and not hasattr(message, 'tool_calls'):
-                            cleaned_message += str(message)
-                        cleaned_messages.append(cleaned_message)
-                    output["messages"] = cleaned_messages
-                all_outputs.append(output)
-                pbar.update(1)
-    
+            
+            # Capture stdout during execution
+            with contextlib.redirect_stdout(stdout_capture):
+                exec(source_code, namespace, namespace)
+
+                if 'build_system' not in namespace:
+                    raise Exception("Could not find build_system function in generated code")
+
+                target_workflow, _ = namespace['build_system']()
+                pbar = tqdm(desc="Testing the System")
+
+                for output in target_workflow.stream(state, config={"recursion_limit": 20}):
+                    cleaned_messages = []
+                    if "messages" in output:
+                        for message in output["messages"]:
+                            cleaned_message = getattr(message, 'type', 'Unknown') + ": "
+                            if hasattr(message, 'content') and message.content:
+                                cleaned_message += message.content
+                            if hasattr(message, 'tool_calls') and message.tool_calls:
+                                cleaned_message += str(message.tool_calls)
+                            if not hasattr(message, 'content') and not hasattr(message, 'tool_calls'):
+                                cleaned_message += str(message)
+                            cleaned_messages.append(cleaned_message)
+                        output["messages"] = cleaned_messages
+                    all_outputs.append(output)
+                    pbar.update(1)
+            
             pbar.close()
-    
+
         except Exception as e:
             error_message = f"\n\n Error while testing the system:\n{str(e)}"
-    
+
+        # Always capture stdout after try block
+        captured_output = stdout_capture.getvalue()
+        
         result = "\n".join([f"State {i}: " + str(out) for i, out in enumerate(all_outputs)]) if all_outputs else {}
-    
-        test_result = f"Test completed.\n <TestResults>\n{result}\n</TestResults>"
-    
+        
+        # Add captured stdout to the result
+        test_result = f"Test completed.\n <SystemStates>\n{result}\n</SystemStates>"
+        if captured_output:
+            test_result += f"\n\n<Stdout>\n{captured_output}\n</Stdout>"
+
         if error_message:
             raise Exception(error_message)
         else:
             return test_result
     
-
     tools["TestSystem"] = tool(runnable=test_system, name_or_callable="TestSystem")
 
     # Tool: DeleteNode
@@ -451,11 +476,11 @@ def build_system():
             response.content = "I will call the necessary tools."
         
         # Check for decorator-style tool calls
-        tool_messages, tool_results, _ = execute_decorator_tool_calls(response.content)
+        human_message, tool_results = execute_decorator_tool_calls(response.content)
 
         updated_messages = messages + [response]
-        if tool_messages:
-            updated_messages.extend(tool_messages)
+        if human_message:
+            updated_messages.append(human_message)
         else:
             updated_messages.append(HumanMessage(content="You made no valid function calls. Remember to use the @@decorator_name() syntax."))
 
@@ -464,10 +489,10 @@ def build_system():
         design_completed = False
         if tool_results and 'EndDesign' in tool_results and "Ending the design process" in str(tool_results['EndDesign']):
             test_passed_recently = False
-            search_start_index = max(0, len(messages) - 6)
+            search_start_index = max(0, len(messages) - 4)
             for msg in reversed(updated_messages[search_start_index:]):
                 if isinstance(msg, HumanMessage) and hasattr(msg, 'content'):
-                    if "Test completed." in msg.content:
+                    if "Test completed." in msg.content and not "Error while testing the system" in msg.content:
                         test_passed_recently = True
                         break
                     elif "Error while testing the system" in msg.content:
@@ -477,9 +502,11 @@ def build_system():
             if test_passed_recently or iteration >= 58:
                 design_completed = True
             else:
-                for i, tm in enumerate(tool_messages):
-                    if tm.name == 'EndDesign':
-                        tm.content += "Error: Cannot finalize design. Please run successful tests using TestSystem first."
+                if human_message and "Ending the design process..." in human_message.content:
+                    human_message.content = human_message.content.replace(
+                        "Ending the design process...",
+                        "Error: Cannot finalize the design. Please run successful tests using @@test_system first."
+                    )
     
         new_state = {"messages": updated_messages, "design_completed": design_completed}
         return new_state

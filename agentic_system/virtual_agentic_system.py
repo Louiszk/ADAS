@@ -29,6 +29,9 @@ class VirtualAgenticSystem:
         
         self.state_attributes = {"messages": "List[Any]"}
         
+        # For helper file functionality
+        self.helper_code = ""
+        
     def set_state_attributes(self, attrs):
         self.state_attributes = {"messages": "List[Any]"}
         for name, type_annotation in attrs.items():
@@ -194,4 +197,69 @@ class VirtualAgenticSystem:
                 return new_function
             else:
                 return f"Error: Function '{function_name}' not found after execution"
+    
+    def add_helper_code(self, new_code):
+        """
+        Adds helper code to the system. If a function or constant with the same name 
+        already exists, it will be replaced.
+        """
+        # Get function names in new code
+        function_pattern = re.compile(r'def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(')
+        functions_in_new = set(function_pattern.findall(new_code))
+        
+        constant_pattern = re.compile(r'^([a-zA-Z_][a-zA-Z0-9_]*)\s*=', re.MULTILINE)
+        constants_in_new = set(constant_pattern.findall(new_code))
+        
+        # If there's no existing code, just add the new code
+        if not self.helper_code:
+            self.helper_code = new_code
+            return True
+        
+        # Process existing code line by line
+        existing_lines = self.helper_code.splitlines()
+        result_lines = []
+        
+        # Skip state for removing function bodies
+        skip_function = None
+        indentation_level = 0
+        
+        for line in existing_lines:
+            # Check if this line starts a function definition
+            func_match = function_pattern.match(line)
+            if func_match:
+                func_name = func_match.group(1)
+                if func_name in functions_in_new:
+                    # Skip this function since it will be replaced
+                    skip_function = func_name
+                    indentation_level = len(line) - len(line.lstrip())
+                    continue
+            
+            # Handle skipping functions
+            if skip_function:
+                if line.strip() and len(line) - len(line.lstrip()) <= indentation_level:
+                    # End of function reached
+                    skip_function = None
+                else:
+                    # Still inside function body, skip
+                    continue
+            
+            # Check if this line declares a constant
+            const_match = constant_pattern.match(line)
+            if const_match:
+                const_name = const_match.group(1)
+                if const_name in constants_in_new:
+                    # Skip this constant since it will be replaced
+                    continue
+            
+            # If we get here, keep the line
+            result_lines.append(line)
+        
+        # Add the new code
+        result_lines.append("")  # Add a blank line for separation
+        result_lines.append(new_code)
+        
+        # Update helper code
+        self.helper_code = "\n".join(result_lines)
+        
+        return True
             
