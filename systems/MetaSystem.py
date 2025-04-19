@@ -436,17 +436,17 @@ def build_system():
                 max_tokens=context_length,
                 strategy="last",
                 token_counter=len,
-                allow_partial=False    
+                allow_partial=False
             )
         except Exception as e:
             print(f"Error during message trimming: {e}")
 
         code_message = f"(Iteration {iteration}) Current Code:\n" + materialize_system(target_system, output_dir=None)
-
+    
         full_messages = [SystemMessage(content=system_prompts.meta_agent), initial_message] + trimmed_messages + [HumanMessage(content=code_message)]
         print([getattr(last_msg, 'type', 'Unknown') for last_msg in full_messages])
         response = llm.invoke(full_messages)
-        
+
         if not hasattr(response, 'content') or not response.content:
             response.content = "I will call the necessary tools."
         
@@ -459,6 +459,7 @@ def build_system():
         else:
             updated_messages.append(HumanMessage(content="You made no valid function calls. Remember to use the @@decorator_name() syntax."))
 
+            
         # Ending the design if the last test ran without errors (this does not check accuracy)
         design_completed = False
         if tool_results and 'EndDesign' in tool_results and "Ending the design process" in str(tool_results['EndDesign']):
@@ -473,7 +474,7 @@ def build_system():
                         test_passed_recently = False
                         break
 
-            if test_passed_recently or iteration > 58:
+            if test_passed_recently or iteration >= 58:
                 design_completed = True
             else:
                 for i, tm in enumerate(tool_messages):

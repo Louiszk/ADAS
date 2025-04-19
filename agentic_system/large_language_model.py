@@ -23,9 +23,9 @@ def parse_decorator_tool_calls(text):
     }
     
     # Extract code blocks
-    code_blocks = re.findall(r'^```(?:python)?\s*\n(.*?)\n```$', text, re.DOTALL | re.MULTILINE)
+    code_blocks = re.findall(r'^```(.*?)\n```', text, re.DOTALL | re.MULTILINE)
     if not code_blocks:
-        code_blocks = [text]
+        print("No code blocks found!")
     
     for block in code_blocks:
         lines = block.split('\n')
@@ -235,7 +235,7 @@ def get_model(wrapper, model_name, temperature):
 class LargeLanguageModel:
     available_tools = {}
 
-    def __init__(self, temperature=0.4, wrapper = "openai", model_name="gpt-4o-mini"):
+    def __init__(self, temperature=0.2, wrapper = "openai", model_name="gpt-4.1-nano"):
         self.model = get_model(wrapper, model_name, temperature)
         self.wrapper = wrapper
 
