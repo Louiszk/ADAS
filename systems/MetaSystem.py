@@ -7,7 +7,7 @@ import os
 from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage
 from typing import Dict, List, Any, Callable, Optional, Union, TypeVar, Generic, Tuple, Set, TypedDict
-from agentic_system.large_language_model import LargeLanguageModel, execute_decorator_tool_calls
+from agentic_system.large_language_model import LargeLanguageModel, parse_decorator_tool_calls, execute_decorator_tool_calls
 import json
 from tqdm import tqdm
 import traceback
@@ -118,79 +118,128 @@ def build_system():
 
     tools["SetStateAttributes"] = tool(runnable=set_state_attributes, name_or_callable="SetStateAttributes")
 
-    # Tool: CreateNode
-    # Description: Creates a node in the target system with custom function implementation
-    def add_node(name: str, description: str, function_code: str) -> str:
+    # Tool: AddComponent
+    # Description: Adds a component (node, tool, or router) to the target system
+    def add_component(component_type: str, name: str, description: str, function_code: str = None) -> str:
         """
-            Creates a node in the target system.
-                function_code: Python code defining the node's processing function
-        """
-        try:
-            node_function = target_system.get_function(function_code)
-    
-            target_system.create_node(name, node_function, description, function_code)
-            return f"Node '{name}' created successfully"
-        except Exception as e:
-            return f"Error creating node: {repr(e)}"
-    
-
-    tools["CreateNode"] = tool(runnable=add_node, name_or_callable="CreateNode")
-
-    # Tool: CreateTool
-    # Description: Creates a tool in the target system that can be used by nodes
-    def add_tool(name: str, description: str, function_code: str) -> str:
-        """
-            Creates a tool in the target system that can be bound to agents and invoked by functions.
-                function_code: Python code defining the tool's function including type annotations and a clear docstring
+            Creates a component in the target system.
+                component_type: Type of component to create ('node', 'tool', or 'router')
+                name: Name of the component
+                description: Description of the component
+                function_code: Python code defining the component's function (required for all component types)
         """
         try:
-            tool_function = target_system.get_function(function_code)
-    
-            target_system.create_tool(name, description, tool_function, function_code)
-            return f"Tool '{name}' created successfully"
+            if component_type.lower() not in ["node", "tool", "router"]:
+                return f"Error: Invalid component type '{component_type}'. Must be 'node', 'tool', or 'router'."
+            
+            if not function_code:
+                return f"Error: function_code is required for all component types"
+                
+            # Get the function implementation from the code
+            func = target_system.get_function(function_code)
+            if isinstance(func, str) and func.startswith("Error"):
+                return func  # Return the error
+                
+            if component_type.lower() == "node":
+                target_system.create_node(name, description, func, function_code)
+                return f"Node '{name}' created successfully"
+                
+            elif component_type.lower() == "tool":
+                target_system.create_tool(name, description, func, function_code)
+                return f"Tool '{name}' created successfully"
+                
+            elif component_type.lower() == "router":
+                target_system.create_conditional_edge(
+                    source=name,
+                    condition=func,
+                    condition_code=function_code
+                )
+                
+                return f"Conditional edge from '{name}' added successfully"
+                
         except Exception as e:
-            return f"Error creating tool: {repr(e)}"
-    
+            return f"Error creating {component_type}: {repr(e)}"
 
-    tools["CreateTool"] = tool(runnable=add_tool, name_or_callable="CreateTool")
+    tools["AddComponent"] = tool(runnable=add_component, name_or_callable="AddComponent")
 
     # Tool: EditComponent
-    # Description: Edits a node or tool's implementation
+    # Description: Edits a component's implementation
     def edit_component(component_type: str, name: str, new_function_code: str, new_description: Optional[str] = None) -> str:
         """
-            Modifies an existing node or tool's implementation by providing a new_function_code. This does not allow renaming.
-                component_type: Type of component to edit ('node' or 'tool')
+            Modifies an existing component's implementation.
+                component_type: Type of component to edit ('node', 'tool', or 'router')
                 name: Name of the component to edit
                 new_function_code: New Python code for the component's function
+                new_description: Optional new description for the component
         """
         try:
-            if component_type.lower() not in ["node", "tool"]:
-                return f"Error: Invalid component type '{component_type}'. Must be 'node' or 'tool'."
-    
-            if name not in target_system.nodes and name not in target_system.tools:
-                return f"Error: '{name}' not found"
-    
+            if component_type.lower() not in ["node", "tool", "router"]:
+                return f"Error: Invalid component type '{component_type}'. Must be 'node', 'tool', or 'router'."
+                
             new_function = target_system.get_function(new_function_code)
-    
+            if isinstance(new_function, str) and new_function.startswith("Error"):
+                return new_function  # Return the error
+                
             if component_type.lower() == "node":
                 if name not in target_system.nodes:
                     return f"Error: Node '{name}' not found"
-    
-                target_system.edit_node(name, new_function, new_description, new_function_code)
+                
+                target_system.create_node(name, new_description, new_function, new_function_code)
                 return f"Node '{name}' updated successfully"
-    
-            else:
+                
+            elif component_type.lower() == "tool":
                 if name not in target_system.tools:
                     return f"Error: Tool '{name}' not found"
-    
-                target_system.edit_tool(name, new_function, new_description, new_function_code)
+                
+                target_system.create_tool(name, new_description, new_function, new_function_code)
                 return f"Tool '{name}' updated successfully"
-    
+                
+            elif component_type.lower() == "router":
+                if name not in target_system.conditional_edges:
+                    return f"Error: Router for node '{name}' not found"
+                    
+                target_system.create_conditional_edge(
+                    source=name,
+                    condition=new_function,
+                    condition_code=new_function_code
+                )
+                
+                return f"Router for node '{name}' updated successfully"
+                
         except Exception as e:
             return f"Error editing {component_type}: {repr(e)}"
-    
 
     tools["EditComponent"] = tool(runnable=edit_component, name_or_callable="EditComponent")
+
+    # Tool: DeleteComponent
+    # Description: Deletes a component from the target system
+    def delete_component(component_type: str, name: str) -> str:
+        """
+            Deletes a component from the target system.
+                component_type: Type of component to delete ('node', 'tool', or 'router')
+                name: Name of the component or source node for routers
+        """
+        try:
+            if component_type.lower() not in ["node", "tool", "router"]:
+                return f"Error: Invalid component type '{component_type}'. Must be 'node', 'tool', or 'router'."
+                
+            if component_type.lower() == "node":
+                result = target_system.delete_node(name)
+                return f"Node '{name}' deleted successfully" if result else f"Failed to delete node '{name}'"
+                
+            elif component_type.lower() == "tool":
+                result = target_system.delete_tool(name)
+                return f"Tool '{name}' deleted successfully" if result else f"Failed to delete tool '{name}'"
+                    
+                
+            elif component_type.lower() == "router":
+                result = target_system.delete_conditional_edge(name)
+                return f"Router for node '{name}' deleted successfully" if result else f"No router found for node '{name}'"
+                
+        except Exception as e:
+            return f"Error deleting {component_type}: {repr(e)}"
+
+    tools["DeleteComponent"] = tool(runnable=delete_component, name_or_callable="DeleteComponent")
 
     # Tool: AddEdge
     # Description: Adds an edge between nodes in the target system
@@ -209,88 +258,16 @@ def build_system():
 
     tools["AddEdge"] = tool(runnable=add_edge, name_or_callable="AddEdge")
 
-    # Tool: AddConditionalEdge
-    # Description: Adds a conditional edge in the target system.
-    def add_conditional_edge(source: str, condition_code: str) -> str:
-        """
-            Adds a conditional edge from a source node.
-                source: Name of the source node
-                condition_code: Python code for the condition function that returns the target node
-        """
-        try:
-            condition_function = target_system.get_function(condition_code)
-    
-            # Extract potential node names from string literals in the code (better visualization)
-            string_pattern = r"['\"]([^'\"]*)['\"]"
-            potential_nodes = set(re.findall(string_pattern, condition_code))
-    
-            path_map = None
-            auto_path_map = {}
-            for node_name in potential_nodes:
-                if node_name in target_system.nodes:
-                    auto_path_map[node_name] = node_name
-    
-            if auto_path_map:
-                path_map = auto_path_map
-    
-            target_system.create_conditional_edge(
-                source = source, 
-                condition = condition_function,
-                condition_code = condition_code,
-                path_map = path_map
-            )
-    
-            result = f"Conditional edge from '{source}' added successfully"
-            if path_map:
-                result += f" with path map to {list(path_map.values())}"
-    
-            return result
-        except Exception as e:
-            return f"Error adding conditional edge: {repr(e)}"
-    
-
-    tools["AddConditionalEdge"] = tool(runnable=add_conditional_edge, name_or_callable="AddConditionalEdge")
-
-    # Tool: SetEndpoints
-    # Description: Sets the entry point and/or finish point of the workflow
-    def set_endpoints(entry_point: str = None, finish_point: str = None) -> str:
-        """
-            Sets the entry point (start node) and/or finish point (end node) of the workflow.
-                entry_point: Name of the node to set as entry point; equivalent to graph.add_edge(START, entry_point)
-                finish_point: Name of the node to set as finish point; equivalent to graph.add_edge(finish_point, END)
-        """
-        results = []
-    
-        if entry_point is not None:
-            try:
-                target_system.set_entry_point(entry_point)
-                results.append(f"Entry point set to '{entry_point}' successfully")
-            except Exception as e:
-                results.append(f"Error setting entry point: {repr(e)}")
-    
-        if finish_point is not None:
-            try:
-                target_system.set_finish_point(finish_point)
-                results.append(f"Finish point set to '{finish_point}' successfully")
-            except Exception as e:
-                results.append(f"Error setting finish point: {repr(e)}")
-    
-        if not results:
-            return "No endpoints were specified. Please provide entry_point and/or finish_point."
-    
-        return "\n".join(results)
-    
-
-    tools["SetEndpoints"] = tool(runnable=set_endpoints, name_or_callable="SetEndpoints")
-
     # Tool: Helper
     # Description: Adds or updates code in the helper file
     def helper(code: str) -> str:
         """
             Adds or updates helper functions and constants. 
-            If a function or constant with the same name already exists, it will be replaced.
+            If a helper function or constant with the same name already exists, it will be replaced.
                 code: Python code containing functions and/or constants to add to the helper section
         """
+        if "def build_system" in code:
+            return f"Error updating helper code: This tool is only for helper functions and constants. Do NOT try to update the entire file."
         try:
             target_system.add_helper_code(code)
             return f"Helper code updated successfully"
@@ -311,9 +288,6 @@ def build_system():
         stdout_capture = io.StringIO()
         
         try:
-            if not (target_system.entry_point and target_system.finish_point):
-                raise Exception("You must set an entry point and finish point before testing")
-
             source_code = materialize_system(target_system, None)
             namespace = {}
             
@@ -365,22 +339,6 @@ def build_system():
     
     tools["TestSystem"] = tool(runnable=test_system, name_or_callable="TestSystem")
 
-    # Tool: DeleteNode
-    # Description: Deletes a node and all its associated edges from the target system
-    def delete_node(node_name: str) -> str:
-        """
-            Deletes a node and all its associated edges.
-                node_name: Name of the node to delete
-        """
-        try:
-            result = target_system.delete_node(node_name)
-            return f"Node '{node_name}' deleted successfully" if result else f"Failed to delete node '{node_name}'"
-        except Exception as e:
-            return f"Error deleting node: {repr(e)}"
-    
-
-    tools["DeleteNode"] = tool(runnable=delete_node, name_or_callable="DeleteNode")
-
     # Tool: DeleteEdge
     # Description: Deletes an edge between nodes in the target system
     def delete_edge(source: str, target: str) -> str:
@@ -398,32 +356,13 @@ def build_system():
 
     tools["DeleteEdge"] = tool(runnable=delete_edge, name_or_callable="DeleteEdge")
 
-    # Tool: DeleteConditionalEdge
-    # Description: Deletes a conditional edge from a source node
-    def delete_conditional_edge(source: str) -> str:
-        """
-            Deletes a conditional edge from a source node.
-                source: Name of the source node
-        """
-        try:
-            result = target_system.delete_conditional_edge(source)
-            return f"Conditional edge from '{source}' deleted successfully" if result else f"No conditional edge found from '{source}'"
-        except Exception as e:
-            return f"Error deleting conditional edge: {repr(e)}"
-    
-
-    tools["DeleteConditionalEdge"] = tool(runnable=delete_conditional_edge, name_or_callable="DeleteConditionalEdge")
-
     # Tool: EndDesign
     # Description: Finalizes the system design process
     def end_design() -> str:
         """
             Finalizes the system design process.
         """
-        try:
-            if not (target_system.entry_point and target_system.finish_point):
-                return "Error finalizing system: You must set an entry point and finish point before finalizing"
-    
+        try:  
             code_dir = "sandbox/workspace/automated_systems"
             materialize_system(target_system, code_dir)
             print(f"System code materialized to {code_dir}")
@@ -475,8 +414,9 @@ def build_system():
         if not hasattr(response, 'content') or not response.content:
             response.content = "I will call the necessary tools."
         
-        # Check for decorator-style tool calls
-        human_message, tool_results = execute_decorator_tool_calls(response.content)
+        code_context = "\n".join(target_system.imports) + "\n\n" + target_system.helper_code
+        decorator_tool_calls = parse_decorator_tool_calls(response.content, code_context)
+        human_message, tool_results = execute_decorator_tool_calls(decorator_tool_calls)
 
         updated_messages = messages + [response]
         if human_message:

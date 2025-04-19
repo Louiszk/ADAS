@@ -17,20 +17,18 @@ You have these decorators available for designing the system:
             attributes: A python dictionary mapping attribute names to string type annotations. 
             {"messages": "List[Any]"} is the default and will be set automatically.
     """
-@@create_node(name: str, description: str)
+@@add_component(component_type: str, name: str, description: str)
     """
-        Creates a node in the target system.
-            Place the Python code defining the node's processing function below the decorator.
-    """
-@@create_tool(name: str, description: str)
-    """
-        Creates a tool in the target system that can be bound to agents and invoked by functions.
-            Place the Python code defining the tool's function (including type annotations and a clear docstring) below the decorator.
+        Creates a component in the target system.
+            component_type: Type of component to create ('node', 'tool', or 'router')
+            name: Name of the component (for router, this is the source node name)
+            description: Description of the component
+            Place the Python code defining the component's function below the decorator.
     """
 @@edit_component(component_type: str, name: str, new_description: Optional[str] = None)
     """
-        Modifies an existing node or tool's implementation.
-            component_type: Type of component to edit ('node' or 'tool')
+        Modifies an existing component's implementation.
+            component_type: Type of component to edit ('node', 'tool', or 'router')
             name: Name of the component to edit
             new_description: Optional new description for the component
             Place the new Python code for the component's function below the decorator.
@@ -41,44 +39,28 @@ You have these decorators available for designing the system:
             source: Name of the source node
             target: Name of the target node
     """
-@@add_conditional_edge(source: str)
+@@delete_component(component_type: str, name: str)
     """
-        Adds a conditional edge from a source node.
-            source: Name of the source node
-            Place the Python code for the condition function that returns the target node below the decorator.
-    """
-@@set_endpoints(entry_point: str = None, finish_point: str = None)
-    """
-        Sets the entry point (start node) and/or finish point (end node) of the workflow.
-            entry_point: Name of the node to set as entry point
-            finish_point: Name of the node to set as finish point
+        Deletes a component from the target system.
+            component_type: Type of component to delete ('node', 'tool', or 'router')
+            name: Name of the component or source node for routers
     """
 @@helper()
     """
         Adds or updates helper functions and constants.
-        If a function or constant with the same name already exists, it will be replaced.
-            code: Python code containing functions and/or constants to add to the helper section
+        If a helper function or constant with the same name already exists, it will be replaced.
+        Place the Python code containing helper functions and/or constants below the decorator.
     """
 @@test_system(state: Dict[str, Any])
     """
         Executes the current system with a test input state to validate functionality.
             state: A python dictionary with state attributes e.g. {"messages": ["Test Input"], "attr2": [3, 5]}
     """
-@@delete_node(node_name: str)
-    """
-        Deletes a node and all its associated edges.
-            node_name: Name of the node to delete
-    """
 @@delete_edge(source: str, target: str)
     """
         Deletes an edge between nodes.
             source: Name of the source node
             target: Name of the target node
-    """
-@@delete_conditional_edge(source: str)
-    """
-        Deletes a conditional edge from a source node.
-            source: Name of the source node
     """
 @@end_design()
     """
@@ -105,7 +87,7 @@ For example:
 
 For code-related decorators, provide the code directly after the decorator:
 ```
-@@create_node(name = "MyNode", description = "This is my custom node")
+@@add_component(component_type = "node", name = "MyNode", description = "This is my custom node")
 def node_function(state):
     # Node implementation
     messages = state.get("messages", [])
@@ -116,11 +98,25 @@ def node_function(state):
 ```
 
 The code-related decorators include:
-- @@create_node - Place the node function implementation below it
-- @@create_tool - Place the tool function implementation below it
-- @@add_conditional_edge - Place the router function implementation below it
+- @@add_component - Place the component function implementation below it
 - @@edit_component - Place the new function implementation below it
-- @@helper - Place the functions and constants below it
+- @@helper - Place the helper functions or constants below it
+
+For router (conditional edge) components, use the add_component decorator with component_type="router":
+```
+@@add_component(component_type = "router", name = "SourceNode", description = "Routes to different nodes based on some condition")
+def router_function(state):
+    # Analyze state and return next node name
+    if some_condition:
+        return "NodeA"
+    return "NodeB"
+```
+
+Use START and END as special node names for setting entry and exit points:
+```
+@@add_edge(source = START, target = "FirstNode")  # Sets FirstNode as the entry point
+@@add_edge(source = "LastNode", target = END)     # Sets LastNode as the finish point
+```
 """
 
 chain_of_thought = """
@@ -206,7 +202,7 @@ There are only these two possibilities to run tools. You can not call the tool f
 
 ## Edges
 1. **Standard Edges**: Direct connections between nodes
-2. **Conditional Edges**: Branching logic from a source node using router functions:
+2. **Conditional Edges/Routers**: Branching logic from a source node using router functions:
 ```python
 # Example
 def router_function(state):

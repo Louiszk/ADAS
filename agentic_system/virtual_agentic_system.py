@@ -1,4 +1,5 @@
 import re
+from langgraph.graph import START, END
 
 class VirtualAgenticSystem:
     """
@@ -17,14 +18,14 @@ class VirtualAgenticSystem:
         
         self.edges = []  # list of (source, target) tuples
         self.conditional_edges = {}  # source_node -> {condition: func, path_map: map}
-        
-        self.entry_point = None
-        self.finish_point = None
+
         self.imports = [
-            "from langchain_core.tools import tool",
-            "from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage",
             "from typing import Dict, List, Any, Callable, Optional, Union, TypeVar, Generic, Tuple, Set, TypedDict",
-            "from agentic_system.large_language_model import LargeLanguageModel, execute_tool_calls"
+            "from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage",
+            "from agentic_system.large_language_model import LargeLanguageModel, execute_tool_calls",
+            "from langgraph.graph import StateGraph, START, END",
+            "from langchain_core.tools import tool",
+            "import os"
             ]
         
         self.state_attributes = {"messages": "List[Any]"}
@@ -42,17 +43,7 @@ class VirtualAgenticSystem:
         if import_statement not in self.imports:
             self.imports.append(import_statement)
 
-    def set_entry_point(self, entry_node):
-        if entry_node not in self.nodes:
-            raise ValueError(f"Invalid entry point: Node '{entry_node}' does not exist")
-        self.entry_point = entry_node
-
-    def set_finish_point(self, finish_node):
-        if finish_node not in self.nodes:
-            raise ValueError(f"Invalid finish point: Node {finish_node} does not exist")
-        self.finish_point = finish_node
-
-    def create_node(self, name, func, description="", source_code=None):
+    def create_node(self, name, description, func, source_code=None):
         if func.__doc__ is None or func.__doc__.strip() == "":
             func.__doc__ = description
         if source_code:
@@ -61,21 +52,6 @@ class VirtualAgenticSystem:
         self.nodes[name] = description
         self.node_functions[name] = func
 
-        return True
-
-    def edit_node(self, name, func=None, description=None, source_code=None):
-        if name not in self.nodes:
-            return False
-            
-        if description:
-            self.nodes[name] = description
-                
-        if func:
-            self.node_functions[name] = func
-        
-        if source_code:
-            self.node_functions[name]._source_code = source_code
-                
         return True
 
     def create_tool(self, name, description, func, source_code=None):
@@ -89,29 +65,18 @@ class VirtualAgenticSystem:
         self.tool_functions[name] = func
 
         return True
-    
-    def edit_tool(self, name, new_function=None, new_description=None, source_code=None):
-        """Edit tool properties."""
-        if name not in self.tools:
-            return False
-            
-        if new_description:
-            self.tools[name] = new_description
-                
-        if new_function:
-            self.tool_functions[name] = new_function
-        
-        if source_code:
-            self.tool_functions[name]._source_code = source_code
-                
-        return True
 
     def create_edge(self, source, target):
         """Create a standard edge between nodes."""
-        if source not in self.nodes:
+        if source in ["START", "__start__"]:
+            source = START
+        if target in ["END", "__end__"]:
+            target = END
+            
+        if source not in self.nodes and source != START:
             raise ValueError(f"Invalid source node: '{source}' does not exist")
             
-        if target not in self.nodes:
+        if target not in self.nodes and target != END:
             raise ValueError(f"Invalid target node: '{target}' does not exist")
         
         if any(edge_source == source for edge_source, _ in self.edges):
@@ -122,6 +87,8 @@ class VirtualAgenticSystem:
 
     def create_conditional_edge(self, source, condition, condition_code=None, path_map=None):
         """Create a conditional edge with a router function."""
+        if source in ["START" "__start__", START, "END", "__end__", END]:
+            raise ValueError(f"Invalid source node: Routers from endpoints are not allowed.")
         if source not in self.nodes:
             raise ValueError(f"Invalid source node: '{source}' does not exist")
         
@@ -130,11 +97,16 @@ class VirtualAgenticSystem:
         
         edge_info = {"condition": condition}
         
-        if path_map is not None:
-            for target in path_map.values():
-                if target not in self.nodes:
-                    raise ValueError(f"Invalid target node in path_map: '{target}' does not exist")
-            
+        # if path_map is None:
+        #     path_map = self._auto_path_map(condition_code)
+        
+        # for target in path_map.values():
+        #     if target in ["END", "__end__"]:
+        #         target = END
+        #     if target not in self.nodes and target != END:
+        #         raise ValueError(f"Invalid target node in path_map: '{target}' does not exist")
+        
+        if path_map:
             edge_info["path_map"] = path_map.copy()
         
         self.conditional_edges[source] = edge_info
@@ -143,6 +115,8 @@ class VirtualAgenticSystem:
 
     def delete_node(self, name):
         """Delete a node and all associated edges."""
+        if name in ["START" "__start__", START, "END", "__end__", END]:
+            raise ValueError(f"Deletion of endpoints is not allowed")
         if name not in self.nodes:
             return False
         
@@ -155,15 +129,26 @@ class VirtualAgenticSystem:
         
         self.edges = [(s, t) for s, t in self.edges if s != name and t != name]
         
-        if self.entry_point == name:
-            self.entry_point = None
-        if self.finish_point == name:
-            self.finish_point = None
+        return True
+    
+    def delete_tool(self, name):
+        """Delete a tool."""
+        if name not in self.tools:
+            return False
+        
+        del self.tools[name]
+        if name in self.tool_functions:
+            del self.tool_functions[name]
         
         return True
 
     def delete_edge(self, source, target):
         """Delete a standard edge."""
+        if source in ["START", "__start__"]:
+            source = START
+        if target in ["END", "__end__"]:
+            target = END
+            
         edge = (source, target)
         if edge in self.edges:
             self.edges.remove(edge)
@@ -180,23 +165,20 @@ class VirtualAgenticSystem:
         return False
     
     def get_function(self, function_code):
-            # if "placeholder" in function_code.lower():
-            #     raise ValueError("Do not use placeholder logic. Always implement the full logic.")
-            
-            match = re.search(r'def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(', function_code)
-            if not match:
-                return "Error: Could not identify function name in the provided code"
-            
-            function_name = match.group(1)
-            completed_function_code = "\n".join(self.imports) + "\n" + function_code    
-            local_vars = {}
-            exec(completed_function_code, {"__builtins__": __builtins__}, local_vars)
-            
-            if function_name in local_vars and callable(local_vars[function_name]):
-                new_function = local_vars[function_name]
-                return new_function
-            else:
-                return f"Error: Function '{function_name}' not found after execution"
+        match = re.search(r'def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(', function_code)
+        if not match:
+            return "Error: Could not identify function name in the provided code"
+        
+        function_name = match.group(1)
+        completed_function_code = "\n".join(self.imports) + "\n" + function_code    
+        local_vars = {}
+        exec(completed_function_code, {"__builtins__": __builtins__}, local_vars)
+        
+        if function_name in local_vars and callable(local_vars[function_name]):
+            new_function = local_vars[function_name]
+            return new_function
+        else:
+            return f"Error: Function '{function_name}' not found after execution"
     
     def add_helper_code(self, new_code):
         """
@@ -262,4 +244,16 @@ class VirtualAgenticSystem:
         self.helper_code = "\n".join(result_lines)
         
         return True
-            
+
+    def _auto_path_map(self, function_code):
+        string_pattern = r"['\"]([^'\"]*)['\"]"
+        potential_nodes = set(re.findall(string_pattern, function_code))
+    
+        auto_path_map = {}
+        for node_name in potential_nodes:
+            if node_name in self.nodes:
+                auto_path_map[node_name] = node_name
+        if "END" in function_code:
+            auto_path_map["END"] = END
+    
+        return auto_path_map

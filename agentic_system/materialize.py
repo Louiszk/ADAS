@@ -47,9 +47,7 @@ def materialize_system(system, output_dir="systems"):
         f"# {system.system_name} System Configuration",
         f"# Total nodes: {nodes_count}",
         f"# Total tools: {tool_count}",
-        "",
-        "from langgraph.graph import StateGraph",
-        "import os"
+        ""
     ]
     
     if system.imports:
@@ -188,10 +186,6 @@ def materialize_system(system, output_dir="systems"):
 
     # Entry/Exit Configuration
     code_lines.extend([
-        "    # ===== Entry/Exit Configuration =====",
-        f"    graph.set_entry_point(\"{system.entry_point}\")",
-        f"    graph.set_finish_point(\"{system.finish_point}\")",
-        "",
         "    # ===== Compilation =====",
         "    workflow = graph.compile()",
         "    return workflow, tools" if system.tools else "    return workflow, {}",

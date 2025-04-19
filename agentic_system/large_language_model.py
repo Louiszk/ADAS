@@ -1,12 +1,26 @@
 import os
+from langgraph.graph import START, END
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import ToolMessage, HumanMessage, SystemMessage
 from dotenv import load_dotenv
 import re
-import uuid
 
-def parse_decorator_tool_calls(text):
+def parse_arguments(args_str, context_code):
+    args = {}
+    
+    if args_str:
+        try:
+            exec_str = f"def parsing_function(**kwargs): return kwargs\nargs = parsing_function({args_str})"
+            namespace = {}
+            exec("\n\n".join((context_code, exec_str)), namespace, namespace)
+            args = namespace.get('args', {})
+        except Exception as e:
+            print(f"Error parsing arguments: {e}")
+    
+    return args
+
+def parse_decorator_tool_calls(text, context_code):
     """Parse decorator-style tool calls from text."""
     tool_calls = []
     
@@ -16,10 +30,8 @@ def parse_decorator_tool_calls(text):
     
     # Code-related tools that need special handling
     code_related_tools = {
-        'create_node': 'function_code',
-        'create_tool': 'function_code',
+        'add_component': 'function_code',
         'edit_component': 'new_function_code',
-        'add_conditional_edge': 'condition_code',
         'helper': 'code'
     }
     
@@ -37,10 +49,9 @@ def parse_decorator_tool_calls(text):
             
             if line.startswith('@@'):
                 call_match = re.match(r'@@([a-zA-Z_][a-zA-Z0-9_]*)', line)
-                if call_match:
+                if call_match and "(" in line and ")" in line:
                     decorator_name = call_match.group(1)
                     args_str = line[line.index('(')+1:line.rindex(')')]
-                    tool_id = str(uuid.uuid4())[:32]
                     
                     # Map decorator name to tool name if possible
                     tool_name = camelfy(decorator_name)
@@ -57,53 +68,26 @@ def parse_decorator_tool_calls(text):
                         
                         content = '\n'.join(lines[start_idx:end_idx])
                         
-                        # Parse the regular arguments
-                        args = {}
-                        if args_str:
-                            try:
-                                exec_str = f"def parsing_function(**kwargs): return kwargs\nargs = parsing_function({args_str})"
-                                local_vars = {"HumanMessage": HumanMessage, "SystemMessage": SystemMessage}
-                                exec(exec_str, {}, local_vars)
-                                args = local_vars.get('args', {})
-                            except Exception as e:
-                                print(f"Error parsing arguments: {e}")
+                        args = parse_arguments(args_str, context_code)
                         
                         # Add the code content to the appropriate parameter
                         param_name = code_related_tools[decorator_name]
                         args[param_name] = content
                         
-                        tool_calls.append({
-                            'name': tool_name,
-                            'args': args,
-                            'id': f'call_{tool_id}'
-                        })
-                        
                         i = end_idx - 1
                     else:
-                        # Parse regular arguments
-                        args = {}
-                        
-                        if args_str:
-                            try:
-                                exec_str = f"def parsing_function(**kwargs): return kwargs\nargs = parsing_function({args_str})"
-                                local_vars = {}
-                                exec(exec_str, {}, local_vars)
-                                args = local_vars.get('args', {})
-                            except Exception as e:
-                                print(f"Error parsing arguments: {e}")
-                        
-                        tool_calls.append({
-                            'name': tool_name,
-                            'args': args,
-                            'id': f'call_{tool_id}'
-                        })
+                        args = parse_arguments(args_str, context_code)
+
+                    tool_calls.append({
+                        'name': tool_name,
+                        'args': args
+                    })
             i += 1
     
     return tool_calls
 
-def execute_decorator_tool_calls(text):
+def execute_decorator_tool_calls(tool_calls):
     """Execute decorator-style tool calls found in the text."""
-    tool_calls = parse_decorator_tool_calls(text)
     if not tool_calls:
         return [], {}, []
         
@@ -113,7 +97,6 @@ def execute_decorator_tool_calls(text):
     for tool_call in tool_calls:
         tool_name = tool_call['name']
         tool_args = tool_call['args']
-        tool_id = tool_call['id']
         
         if tool_name in LargeLanguageModel.available_tools:
             try:
@@ -122,11 +105,13 @@ def execute_decorator_tool_calls(text):
                 tool_messages.append(str(result) if result else f"Tool {tool_name} executed successfully.")
                 tool_results[tool_name] = result
             except Exception as e:
-                error_message = f"Error executing tool {tool_name}: {repr(e)}"
+                error_message = f"Error executing tool {tool_name}: {repr(e)}."
                 tool_messages.append(error_message)
                 tool_results[tool_name] = error_message
+                break
         else:
             tool_messages.append(f"Tool {tool_name} not found")
+            break
 
     human_message = HumanMessage(content = "\n\n".join(tool_messages)) if tool_messages else None
                 
