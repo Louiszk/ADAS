@@ -1,5 +1,7 @@
 import re
 from langgraph.graph import START, END
+import ast
+import textwrap
 
 class VirtualAgenticSystem:
     """
@@ -180,69 +182,51 @@ class VirtualAgenticSystem:
         else:
             return f"Error: Function '{function_name}' not found after execution"
     
-    def add_helper_code(self, new_code):
+    def add_helper_code(self, new_code: str) -> bool:
         """
-        Adds helper code to the system. If a function or constant with the same name 
-        already exists, it will be replaced.
+        Adds or updates helper functions and constants using AST parsing.
+        If a function or constant with the same name already exists at the top level,
+        it will be replaced. Preserves other existing code.
         """
-        # Get function names in new code
-        function_pattern = re.compile(r'def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(')
-        functions_in_new = set(function_pattern.findall(new_code))
-        
-        constant_pattern = re.compile(r'^([a-zA-Z_][a-zA-Z0-9_]*)\s*=', re.MULTILINE)
-        constants_in_new = set(constant_pattern.findall(new_code))
-        
-        # If there's no existing code, just add the new code
-        if not self.helper_code:
-            self.helper_code = new_code
+        dedented_new_code = textwrap.dedent(new_code).strip()
+
+        if re.search(r"def\s+build_system\s*\(", dedented_new_code):
+            raise ValueError("Helper code cannot contain 'build_system' function definition.")
+
+        if not dedented_new_code:
             return True
-        
-        # Process existing code line by line
-        existing_lines = self.helper_code.splitlines()
-        result_lines = []
-        
-        # Skip state for removing function bodies
-        skip_function = None
-        indentation_level = 0
-        
-        for line in existing_lines:
-            # Check if this line starts a function definition
-            func_match = function_pattern.match(line)
-            if func_match:
-                func_name = func_match.group(1)
-                if func_name in functions_in_new:
-                    # Skip this function since it will be replaced
-                    skip_function = func_name
-                    indentation_level = len(line) - len(line.lstrip())
-                    continue
-            
-            # Handle skipping functions
-            if skip_function:
-                if line.strip() and len(line) - len(line.lstrip()) <= indentation_level:
-                    # End of function reached
-                    skip_function = None
-                else:
-                    # Still inside function body, skip
-                    continue
-            
-            # Check if this line declares a constant
-            const_match = constant_pattern.match(line)
-            if const_match:
-                const_name = const_match.group(1)
-                if const_name in constants_in_new:
-                    # Skip this constant since it will be replaced
-                    continue
-            
-            # If we get here, keep the line
-            result_lines.append(line)
-        
-        # Add the new code
-        result_lines.append("")  # Add a blank line for separation
-        result_lines.append(new_code)
-        
-        # Update helper code
-        self.helper_code = "\n".join(result_lines)
-        
+
+        try:
+            new_ast = ast.parse(dedented_new_code)
+            names_to_replace = _extract_top_level_names(new_ast)
+        except SyntaxError as e:
+            raise ValueError(f"Syntax error in new helper code: {e}") from e
+
+        dedented_existing_code = textwrap.dedent(self.helper_code).strip()
+
+        if not dedented_existing_code:
+            self.helper_code = ast.unparse(new_ast)
+            return True
+
+        try:
+            existing_ast = ast.parse(dedented_existing_code)
+        except SyntaxError as e:
+            raise ValueError(f"Syntax error in existing helper code, cannot merge: {e}") from e
+
+        transformer = RemoveDefinitionsTransformer(names_to_replace)
+        modified_existing_ast = transformer.visit(existing_ast)
+
+        if not isinstance(modified_existing_ast, ast.Module):
+             raise TypeError("AST transformation did not return a Module node.")
+
+        final_body = modified_existing_ast.body + new_ast.body
+        final_ast = ast.Module(body=final_body, type_ignores=[])
+
+        try:
+            self.helper_code = ast.unparse(final_ast)
+        except Exception as e:
+            raise RuntimeError(f"Failed to unparse combined helper code AST: {e}") from e
+
         return True
 
     def _auto_path_map(self, function_code):
@@ -257,3 +241,38 @@ class VirtualAgenticSystem:
             auto_path_map["END"] = END
     
         return auto_path_map
+    
+def _extract_top_level_names(ast_module: ast.Module) -> set[str]:
+    names = set()
+    for node in ast_module.body:
+        if isinstance(node, ast.FunctionDef):
+            names.add(node.name)
+        elif isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    names.add(target.id)
+        elif isinstance(node, ast.AnnAssign):
+            if isinstance(node.target, ast.Name):
+                names.add(node.target.id)
+    return names
+
+class RemoveDefinitionsTransformer(ast.NodeTransformer):
+    def __init__(self, names_to_remove: set[str]):
+        self.names_to_remove = names_to_remove
+        super().__init__()
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST | None:
+        if node.name in self.names_to_remove:
+            return None
+        return self.generic_visit(node)
+
+    def visit_Assign(self, node: ast.Assign) -> ast.AST | None:
+        for target in node.targets:
+            if isinstance(target, ast.Name) and target.id in self.names_to_remove:
+                return None
+        return self.generic_visit(node)
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> ast.AST | None:
+        if isinstance(node.target, ast.Name) and node.target.id in self.names_to_remove:
+            return None
+        return self.generic_visit(node)

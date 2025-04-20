@@ -266,8 +266,6 @@ def build_system():
             If a helper function or constant with the same name already exists, it will be replaced.
                 code: Python code containing functions and/or constants to add to the helper section
         """
-        if "def build_system" in code:
-            return f"Error updating helper code: This tool is only for helper functions and constants. Do NOT try to update the entire file."
         try:
             target_system.add_helper_code(code)
             return f"Helper code updated successfully"
@@ -320,7 +318,7 @@ def build_system():
             pbar.close()
 
         except Exception as e:
-            error_message = f"\n\n Error while testing the system:\n{str(e)}"
+            error_message = f"\n\n Error while testing the system:\n{traceback.format_exc()}"
 
         # Always capture stdout after try block
         captured_output = stdout_capture.getvalue()
