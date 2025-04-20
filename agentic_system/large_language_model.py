@@ -6,21 +6,21 @@ from langchain_core.messages import ToolMessage, HumanMessage, SystemMessage
 from dotenv import load_dotenv
 import re
 
-def parse_arguments(args_str, context_code):
+def parse_arguments(args_str):
     args = {}
     
     if args_str:
         try:
             exec_str = f"def parsing_function(**kwargs): return kwargs\nargs = parsing_function({args_str})"
-            namespace = {}
-            exec("\n\n".join((context_code, exec_str)), namespace, namespace)
-            args = namespace.get('args', {})
+            locals = {"HumanMessage" : HumanMessage, "START": START, "END": END}
+            exec(exec_str, {}, locals)
+            args = locals.get('args', {})
         except Exception as e:
             print(f"Error parsing arguments: {e}")
     
     return args
 
-def parse_decorator_tool_calls(text, context_code):
+def parse_decorator_tool_calls(text):
     """Parse decorator-style tool calls from text."""
     tool_calls = []
     
@@ -31,8 +31,7 @@ def parse_decorator_tool_calls(text, context_code):
     # Code-related tools that need special handling
     code_related_tools = {
         'add_component': 'function_code',
-        'edit_component': 'new_function_code',
-        'helper': 'code'
+        'edit_component': 'new_function_code'
     }
     
     # Extract code blocks
@@ -68,7 +67,7 @@ def parse_decorator_tool_calls(text, context_code):
                         
                         content = '\n'.join(lines[start_idx:end_idx])
                         
-                        args = parse_arguments(args_str, context_code)
+                        args = parse_arguments(args_str)
                         
                         # Add the code content to the appropriate parameter
                         param_name = code_related_tools[decorator_name]
@@ -76,7 +75,7 @@ def parse_decorator_tool_calls(text, context_code):
                         
                         i = end_idx - 1
                     else:
-                        args = parse_arguments(args_str, context_code)
+                        args = parse_arguments(args_str)
 
                     tool_calls.append({
                         'name': tool_name,
@@ -89,7 +88,7 @@ def parse_decorator_tool_calls(text, context_code):
 def execute_decorator_tool_calls(tool_calls):
     """Execute decorator-style tool calls found in the text."""
     if not tool_calls:
-        return [], {}, []
+        return [], {}
         
     tool_messages = []
     tool_results = {}
