@@ -220,6 +220,7 @@ def setup_sandbox_environment(session, reinstall=False):
         ("agentic_system/virtual_agentic_system.py", "/sandbox/workspace/agentic_system/virtual_agentic_system.py"),
         ("agentic_system/large_language_model.py", "/sandbox/workspace/agentic_system/large_language_model.py"),
         ("agentic_system/materialize.py", "/sandbox/workspace/agentic_system/materialize.py"),
+        ("agentic_system/utils.py", "/sandbox/workspace/agentic_system/utils.py"),
         ("agentic_system/udiff.py", "/sandbox/workspace/agentic_system/udiff.py"),
         ("agentic_system/target_system_template.py", "/sandbox/workspace/agentic_system/target_system_template.py"),
         ("systems/system_prompts.py", "/sandbox/workspace/systems/system_prompts.py"),

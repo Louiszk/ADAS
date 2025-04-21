@@ -1,7 +1,5 @@
 import re
 from langgraph.graph import START, END
-import ast
-import textwrap
 
 class VirtualAgenticSystem:
     """
@@ -20,7 +18,8 @@ class VirtualAgenticSystem:
         
         self.edges = []  # list of (source, target) tuples
         self.conditional_edges = {}  # source_node -> {condition: func, path_map: map}
-
+        
+        self.packages = ["langchain-core 0.3.45", "langgraph 0.3.5"]
         self.imports = [
             "from typing import Dict, List, Any, Callable, Optional, Union, TypeVar, Generic, Tuple, Set, TypedDict",
             "from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage",

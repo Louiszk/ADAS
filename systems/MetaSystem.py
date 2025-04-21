@@ -1,25 +1,19 @@
-# MetaSystem System Configuration
-# Total nodes: 2
-# Total tools: 14
-
 from langgraph.graph import StateGraph
-import os
 from langchain_core.tools import tool
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage, trim_messages
 from typing import Dict, List, Any, Callable, Optional, Union, TypeVar, Generic, Tuple, Set, TypedDict
 from agentic_system.large_language_model import LargeLanguageModel, parse_decorator_tool_calls, execute_decorator_tool_calls
-import json
+from agentic_system.materialize import materialize_system
+from agentic_system.utils import get_filtered_packages, clean_messages
+from systems import system_prompts
 from tqdm import tqdm
-import traceback
 import dill as pickle
+import os
 import re
 import io
 import contextlib
 import sys
 import subprocess
-from systems import system_prompts
-from langchain_core.messages import trim_messages
-from agentic_system.materialize import materialize_system
 target_system = None
 
 
@@ -42,12 +36,18 @@ def build_system():
             Securely installs a Python package using pip.
                 package_name: Name of the package to install e.g. "langgraph==0.3.5"
         """
-    
+
+        exclude_packages = [
+            "datasets", "docker", "grpcio-status", "langchain-google-genai", "langchain-openai", "wheel",
+            "langchain-core", "langgraph", "llm-sandbox", "pip", "podman", "python-dotenv", "setuptools"
+            ]
         # Validate package name to prevent command injection
         valid_pattern = r'^[a-zA-Z0-9._-]+(\s*[=<>!]=\s*[0-9a-zA-Z.]+)?$'
     
         if not re.match(valid_pattern, package_name):
             return f"Error: Invalid package name format. Package name '{package_name}' contains invalid characters."
+        if any((ep in package_name for ep in exclude_packages)):
+            return f"Already installed {package_name}"
     
         try:
             process = subprocess.run(
@@ -59,6 +59,7 @@ def build_system():
             )
     
             if process.returncode == 0:
+                target_system.packages = get_filtered_packages([ep for ep in exclude_packages if ep not in ["langchain-core", "langgraph"]])
                 return f"Successfully installed {package_name}"
             else:
                 return f"Error installing {package_name}:\n{process.stdout}"
@@ -301,18 +302,7 @@ def build_system():
                 pbar = tqdm(desc="Testing the System")
 
                 for output in target_workflow.stream(state, config={"recursion_limit": 20}):
-                    cleaned_messages = []
-                    if "messages" in output:
-                        for message in output["messages"]:
-                            cleaned_message = getattr(message, 'type', 'Unknown') + ": "
-                            if hasattr(message, 'content') and message.content:
-                                cleaned_message += message.content
-                            if hasattr(message, 'tool_calls') and message.tool_calls:
-                                cleaned_message += str(message.tool_calls)
-                            if not hasattr(message, 'content') and not hasattr(message, 'tool_calls'):
-                                cleaned_message += str(message)
-                            cleaned_messages.append(cleaned_message)
-                        output["messages"] = cleaned_messages
+                    output["messages"] = clean_messages(output)
                     all_outputs.append(output)
                     pbar.update(1)
             
@@ -396,13 +386,13 @@ def build_system():
         code_message = f"Current Code:\n" + materialize_system(target_system, output_dir=None)
     
         full_messages = [SystemMessage(content=system_prompts.meta_thinker)] + messages + [HumanMessage(content=code_message)]
-        print([getattr(last_msg, 'type', 'Unknown') for last_msg in full_messages])
+        print("Thinking...")
         response = llm.invoke(full_messages)
 
-        transition_message = HumanMessage(content= " \n".join([
+        transition_message = HumanMessage(content= "\n".join([
             "Thank you for the detailed plan. Please implement this system design step by step.",
-            "Start by setting up the state attributes, imports and install the necessary packages,",
-            "then implement each component according to the plan above."]))
+            "Start by setting up the state attributes, imports and installing the necessary packages."
+            ]))
         updated_messages = messages + [response, transition_message] 
 
         new_state = {"messages": updated_messages}

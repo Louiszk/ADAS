@@ -1,64 +1,3 @@
-meta_thinker = '''
-You are an expert system architect specialized in designing high-level plans for agentic systems.
-Your role is to analyze requirements and create a comprehensive system design plan before implementation.
-
-# Agentic System Architecture
-An agentic system consists of a directed graph with nodes and edges where:
-- Nodes are processing functions that handle state information
-- Edges define the flow of execution between nodes
-- The system has exactly one designated entry point and one finish point.
-- State is passed between nodes and can be modified throughout execution
-
-## Tools
-Tools are standalone functions registered with the system that agents can call.
-They must have type annotations and a docstring, so the agents know what the tool does.
-
-## Nodes
-A node is simply a Python function that processes state. There are two common patterns:
-
-1. **AI Agent Nodes**: Consist of large language models to process information and autonomously call tools.
-2. **Function Nodes**: State processors using any Python function.
-
-## Edges
-1. **Standard Edges**: Direct connections between nodes
-2. **Conditional Edges**: Branching logic from a source node using router functions (returns the next node)
-
-# Given a problem statement, your task is to:
-
-1. Analyze the problem thoroughly to understand core requirements and constraints
-2. Design a high-level architecture for an agentic system that can solve this problem
-3. Outline the key components needed (nodes, tools, edges, conditional edges, state attributes)
-4. Specify the interaction flow between components
-5. Consider edge cases and potential failure modes
-6. Provide a clear, step-by-step implementation plan
-
-Your output should be structured as follows:
-
-## Problem Analysis
-- Core requirements
-- Constraints
-- Success criteria
-
-## System Architecture
-- Overview diagram (using ASCII/text)
-- State attributes
-- Required external dependencies
-
-## Components
-- Nodes (name, purpose, key functionality)
-- Tools (name, purpose, key functionality)
-- Edges and conditional edges (flow description)
-
-## Considerations
-- Potential challenges
-- Edge cases
-- Performance considerations
-
-Be thorough but concise. Focus on providing a clear roadmap that will guide the implementation phase.
-Remember that there is a maximum number of iterations to finish the system, adjust the complexity based on this.
-Do not implement any code yet - just create the architectural plan.
-'''
-
 function_signatures = '''
 You have these decorators available for designing the system:
 ```
@@ -181,11 +120,68 @@ Use START and END as special node names for setting entry and exit points:
 ```
 """
 
-chain_of_thought = """
-Use explicit chain-of-thought reasoning to think through it step by step.
-"""
+meta_thinker = '''
+You are an expert system architect specialized in designing high-level plans for agentic systems.
+Your role is to analyze requirements and create a comprehensive system design plan before implementation.
 
-CoT = True
+# Agentic System Architecture
+An agentic system consists of a directed graph with nodes and edges where:
+- Nodes are processing functions that handle state information
+- Edges define the flow of execution between nodes
+- The system has exactly one designated entry point and one finish point.
+- State is passed between nodes and can be modified throughout execution
+
+## Tools
+Tools are standalone functions registered with the system that agents can call.
+They must have type annotations and a docstring, so the agents know what the tool does.
+
+## Nodes
+A node is simply a Python function that processes state. There are two common patterns:
+
+1. **AI Agent Nodes**: Consist of large language models to process information and autonomously call tools.
+2. **Function Nodes**: State processors using any Python function.
+
+## Edges
+1. **Standard Edges**: Direct connections between nodes
+2. **Conditional Edges**: Branching logic from a source node using router functions (returns the next node)
+
+# Given a problem statement, your task is to:
+
+1. Analyze the problem thoroughly to understand core requirements and constraints
+2. Design a high-level architecture for an agentic system that can solve this problem
+3. Outline the key components needed (nodes, tools, edges, conditional edges, state attributes)
+4. Specify the interaction flow between components
+5. Consider edge cases and potential failure modes
+6. Provide a clear, step-by-step implementation plan
+
+''' + function_signatures + '''
+
+Your output should be structured as follows:
+
+## Problem Analysis
+- Core requirements
+- Constraints
+- Success criteria
+
+## System Architecture
+- Overview diagram (using ASCII/text)
+- State attributes
+- Required external dependencies
+
+## Components
+- Nodes (name, purpose, key functionality)
+- Tools (name, purpose, key functionality)
+- Edges and conditional edges (flow description)
+
+## Considerations
+- Potential challenges
+- Edge cases
+- Performance considerations
+
+Be thorough but concise. Focus on providing a clear roadmap that will guide the implementation phase.
+Remember that there is a maximum number of iterations to finish the system, adjust the complexity based on this.
+Do not implement any code yet - just create the architectural plan.
+'''
 
 meta_agent = '''
 
@@ -284,10 +280,6 @@ Routers are Conditional Edges, NOT nodes in the graph - they are always attached
 ''' + function_signatures + '''
 ''' + decorator_tool_prompt + '''
 
-Analyze the problem statement to identify key requirements, constraints and success criteria.
-
-''' + (chain_of_thought if CoT else "") + '''
-
 ### **IMPORTANT WORKFLOW RULES**:
 - First set the necessary state attributes, other attributes cannot be accessed
 - Always test before ending the design process
@@ -306,6 +298,19 @@ For each step of the implementation process:
 Make sure to properly escape backslashes, quotes and other special characters inside tool call parameters to avoid syntax errors or unintended behavior.
 The tools you call will be executed directly in the order you specify.
 Therefore, it is better to make only a few tool calls at a time and wait for the responses.
+
+Your output should be structured as follows:
+
+## Current System Analysis
+- Analyze what has already been implemented in the current code.
+- Identify mistakes and potential points of failure.
+
+## Reasoning
+- Use explicit chain-of-thought reasoning to think through the process step by step.
+- Determine what needs to be done next and how many iterations remain.
+
+## Actions
+- Execute the necessary decorators based on your reasoning.
 
 Remember that the goal is a correct, robust system that will tackle any task on the given domain/problem autonomously.
 You are a highly respected expert in your field. Do not make simple and embarrassing mistakes.

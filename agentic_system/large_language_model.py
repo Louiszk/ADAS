@@ -124,7 +124,6 @@ def execute_tool_calls(response):
     tool_messages = []
     tool_results = {}
     for tool_call in response.tool_calls:
-        print("Tool Call:", tool_call)
         tool_name = tool_call['name']
         tool_args = tool_call['args']
         tool_id = tool_call['id']

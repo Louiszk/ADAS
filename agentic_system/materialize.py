@@ -49,6 +49,11 @@ def materialize_system(system, output_dir="systems"):
         f"# Total tools: {tool_count}",
         ""
     ]
+
+    code_lines.append("# Already installed packages")
+    for sp in system.packages:
+        code_lines.append(f"# {sp}")
+    code_lines.append("")
     
     if system.imports:
         for imp in system.imports:
