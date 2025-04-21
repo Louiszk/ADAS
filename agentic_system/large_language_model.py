@@ -3,6 +3,7 @@ from langgraph.graph import START, END
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import ToolMessage, HumanMessage, SystemMessage
+from agentic_system.utils import extract_parenthesized_content
 from dotenv import load_dotenv
 import re
 
@@ -48,39 +49,44 @@ def parse_decorator_tool_calls(text):
             
             if line.startswith('@@'):
                 call_match = re.match(r'@@([a-zA-Z_][a-zA-Z0-9_]*)', line)
-                if call_match and "(" in line and ")" in line:
+                if call_match:
                     decorator_name = call_match.group(1)
-                    args_str = line[line.index('(')+1:line.rindex(')')]
+                    start_pos = call_match.end()
                     
-                    # Map decorator name to tool name if possible
-                    tool_name = camelfy(decorator_name)
+                    open_paren_pos = line.find('(', start_pos)
                     
-                    # Special handling for code-related tools
-                    if decorator_name in code_related_tools:
-                        start_idx = i + 1
-                        end_idx = len(lines)
-                        
-                        for j in range(start_idx, len(lines)):
-                            if lines[j].strip().startswith('@@'):
-                                end_idx = j
-                                break
-                        
-                        content = '\n'.join(lines[start_idx:end_idx])
-                        
-                        args = parse_arguments(args_str)
-                        
-                        # Add the code content to the appropriate parameter
-                        param_name = code_related_tools[decorator_name]
-                        args[param_name] = content
-                        
-                        i = end_idx - 1
-                    else:
+                    if open_paren_pos != -1:
+                        # Extract arguments
+                        args_str, end_line_idx = extract_parenthesized_content(lines, i, open_paren_pos)
                         args = parse_arguments(args_str)
 
-                    tool_calls.append({
-                        'name': tool_name,
-                        'args': args
-                    })
+                        # Map decorator name to tool name if possible
+                        tool_name = camelfy(decorator_name)
+                        
+                        if decorator_name in code_related_tools:
+                            code_start = end_line_idx + 1
+                            code_end = len(lines)
+                            
+                            # Find the next decorator
+                            for k in range(code_start, len(lines)):
+                                if lines[k].strip().startswith('@@'):
+                                    code_end = k
+                                    break
+                            
+                            content = '\n'.join(lines[code_start:code_end])
+                            
+                            param_name = code_related_tools[decorator_name]
+                            args[param_name] = content
+                            
+                            i = code_end - 1
+                        else:
+                            i = end_line_idx
+                        
+                        tool_calls.append({
+                            'name': tool_name,
+                            'args': args
+                        })
+            
             i += 1
     
     return tool_calls

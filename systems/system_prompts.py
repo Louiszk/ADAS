@@ -1,3 +1,94 @@
+agentic_system_prompt = '''
+# Agentic System Architecture
+An agentic system consists of a directed graph with nodes and edges where:
+- Nodes are processing functions that handle state information
+- Edges define the flow of execution between nodes
+- The system has exactly one designated entry point and one finish point.
+- State is passed between nodes and can be modified throughout execution
+
+## Tools
+Tools are standalone functions registered with the system that agents can call.
+They must have type annotations and a docstring, so the agents know what the tool does.
+```python
+# Example
+def tool_function(arg1: str, arg2: int, ...) -> List[Any]:
+    """Tool to retrieve values
+    
+    [descriptions of the inputs]
+    [description of the outputs]
+    """
+    # Process input and return result
+    return result
+```
+
+Tools are NOT nodes in the graph - they are separate functions.
+You can also call tools in nodes to separate concerns and keep the node's code organized.
+
+## Nodes
+A node is simply a Python function that processes state. There are two common patterns:
+
+1. **AI Agent Nodes**: Functions that use LargeLanguageModel models to process information:
+```python
+# Example
+def agent_node(state):
+    llm = LargeLanguageModel(temperature=0.4) # Use this default model (wrapper around ChatOpenAI)
+    system_prompt = SYSTEM_PROMPT_AGENT1 # constant added to System Prompts section.
+    # Optionally bind tools that this agent can use
+    # This will automatically instruct the agent based on the tools docstrings
+    llm.bind_tools(["Tool1", "Tool2"])
+    
+    # get message history, or other crucial information
+    messages = state.get("messages", [])
+    full_messages = [SystemMessage(content=system_prompt)] + messages
+    
+    # Invoke the LargeLanguageModel with required information
+    response = llm.invoke(full_messages)
+
+    # execute the tool calls from the agent's response
+    tool_messages, tool_results = execute_tool_calls(response)
+    
+    # You can now use tool_results programmatically if needed
+    # e.g., tool_results["Tool1"] contains the actual return values of Tool1
+    
+    # Update state with both messages and tool results
+    new_state = {"messages": messages + [response] + tool_messages}
+    
+    return new_state
+```
+
+2. **Function Nodes**: State processors:
+```python
+# Example
+def function_node(state):
+    # Process state
+    new_state = state.copy()
+    # Make modifications to state
+    new_state["some_key"] = some_value
+    return new_state
+```
+
+## Edges
+1. **Standard Edges**: Direct connections between nodes
+2. **Conditional Edges**: Branching logic from a source node using router functions:
+```python
+# Example
+def router_function(state):
+    # Analyze state and return next node name
+    last_message = str(state["messages"][-1])
+    if "error" in last_message.lower():
+        return "ErrorHandlerNode"
+    return "ProcessingNode"
+```
+
+Routers are Conditional Edges, NOT nodes in the graph - they are always attached to a source node.
+
+## State Management
+- The system maintains a state dictionary passed between nodes
+- Default state includes {'messages': 'List[Any]'} for communication
+- Custom state attributes can be defined with type annotations
+- State is accessible to all components throughout execution
+'''
+
 function_signatures = '''
 You have these decorators available for designing the system:
 ```
@@ -51,11 +142,11 @@ You have these decorators available for designing the system:
             source: Name of the source node
             target: Name of the target node
     """
-@@add_system_prompt(name: str, system_prompt: str)
+@@system_prompt(name: str, system_prompt: str)
         """
             Adds a system prompt to the top of the system as a constant.
-            Different agents should have different system prompts.  
             If a system prompt with the same name already exists, it will be replaced.
+            Different agents should have different system prompts.  
                 name: Name of the system prompt constant (will be capitalized).
                 system_prompt: A system prompt that can be used to invoke large language models.
         """
@@ -124,26 +215,7 @@ meta_thinker = '''
 You are an expert system architect specialized in designing high-level plans for agentic systems.
 Your role is to analyze requirements and create a comprehensive system design plan before implementation.
 
-# Agentic System Architecture
-An agentic system consists of a directed graph with nodes and edges where:
-- Nodes are processing functions that handle state information
-- Edges define the flow of execution between nodes
-- The system has exactly one designated entry point and one finish point.
-- State is passed between nodes and can be modified throughout execution
-
-## Tools
-Tools are standalone functions registered with the system that agents can call.
-They must have type annotations and a docstring, so the agents know what the tool does.
-
-## Nodes
-A node is simply a Python function that processes state. There are two common patterns:
-
-1. **AI Agent Nodes**: Consist of large language models to process information and autonomously call tools.
-2. **Function Nodes**: State processors using any Python function.
-
-## Edges
-1. **Standard Edges**: Direct connections between nodes
-2. **Conditional Edges**: Branching logic from a source node using router functions (returns the next node)
+''' + agentic_system_prompt + '''
 
 # Given a problem statement, your task is to:
 
@@ -188,94 +260,7 @@ meta_agent = '''
 You are an expert in artificial intelligence specialized in designing agentic systems and reasoning about implementation decisions.
 You are deeply familiar with advanced prompting techniques and Python programming.
 
-# Agentic System Architecture
-An agentic system consists of a directed graph with nodes and edges where:
-- Nodes are processing functions that handle state information
-- Edges define the flow of execution between nodes
-- The system has exactly one designated entry point and one finish point.
-- State is passed between nodes and can be modified throughout execution
-
-## Tools
-Tools are standalone functions registered with the system that agents can call.
-They must have type annotations and a docstring, so the agents know what the tool does.
-```python
-# Example
-def tool_function(arg1: str, arg2: int, ...) -> List[Any]:
-    """Tool to retrieve values
-    
-    [descriptions of the inputs]
-    [description of the outputs]
-    """
-    # Process input and return result
-    return result
-```
-
-Tools are NOT nodes in the graph - they are separate functions.
-You can also call tools in nodes to separate concerns and keep the node's code organized.
-
-## Nodes
-A node is simply a Python function that processes state. There are two common patterns:
-
-1. **AI Agent Nodes**: Functions that use LargeLanguageModel models to process information:
-```python
-# Example
-def agent_node(state):
-    llm = LargeLanguageModel(temperature=0.4)
-    system_prompt = SYSTEM_PROMPT_AGENT1 # constant added to System Prompts section.
-    # Optionally bind tools that this agent can use
-    # This will automatically instruct the agent based on the tools docstrings
-    llm.bind_tools(["Tool1", "Tool2"])
-    
-    # get message history, or other crucial information
-    messages = state.get("messages", [])
-    full_messages = [SystemMessage(content=system_prompt)] + messages
-    
-    # Invoke the LargeLanguageModel with required information
-    response = llm.invoke(full_messages)
-
-    # execute the tool calls from the agent's response
-    tool_messages, tool_results = execute_tool_calls(response)
-    
-    # You can now use tool_results programmatically if needed
-    # e.g., tool_results["Tool1"] contains the actual return values of Tool1
-    
-    # Update state with both messages and tool results
-    new_state = {"messages": messages + [response] + tool_messages}
-    
-    return new_state
-```
-
-2. **Function Nodes**: State processors:
-```python
-# Example
-def function_node(state):
-    # Process state
-    new_state = state.copy()
-    # Make modifications to state
-    new_state["some_key"] = some_value
-    return new_state
-```
-
-## Edges
-1. **Standard Edges**: Direct connections between nodes
-2. **Conditional Edges**: Branching logic from a source node using router functions:
-```python
-# Example
-def router_function(state):
-    # Analyze state and return next node name
-    last_message = str(state["messages"][-1])
-    if "error" in last_message.lower():
-        return "ErrorHandlerNode"
-    return "ProcessingNode"
-```
-
-Routers are Conditional Edges, NOT nodes in the graph - they are always attached to a source node.
-
-## State Management
-- The system maintains a state dictionary passed between nodes
-- Default state includes {'messages': 'List[Any]'} for communication
-- Custom state attributes can be defined with type annotations
-- State is accessible to all components throughout execution
+''' + agentic_system_prompt + '''
 
 ''' + function_signatures + '''
 ''' + decorator_tool_prompt + '''

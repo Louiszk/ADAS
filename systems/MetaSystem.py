@@ -39,15 +39,15 @@ def build_system():
 
         exclude_packages = [
             "datasets", "docker", "grpcio-status", "langchain-google-genai", "langchain-openai", "wheel",
-            "langchain-core", "langgraph", "llm-sandbox", "pip", "podman", "python-dotenv", "setuptools"
+            "llm-sandbox", "pip", "dill", "podman", "python-dotenv", "setuptools"
             ]
         # Validate package name to prevent command injection
         valid_pattern = r'^[a-zA-Z0-9._-]+(\s*[=<>!]=\s*[0-9a-zA-Z.]+)?$'
     
         if not re.match(valid_pattern, package_name):
             return f"Error: Invalid package name format. Package name '{package_name}' contains invalid characters."
-        if any((ep in package_name for ep in exclude_packages)):
-            return f"Already installed {package_name}"
+        if any((ep in package_name for ep in exclude_packages + ["langgraph", "langchain-core"])):
+            return f"{package_name} is already installed."
     
         try:
             process = subprocess.run(
@@ -59,7 +59,7 @@ def build_system():
             )
     
             if process.returncode == 0:
-                target_system.packages = get_filtered_packages([ep for ep in exclude_packages if ep not in ["langchain-core", "langgraph"]])
+                target_system.packages = get_filtered_packages(exclude_packages) + ["langchain-core 0.3.45"]
                 return f"Successfully installed {package_name}"
             else:
                 return f"Error installing {package_name}:\n{process.stdout}"
@@ -86,10 +86,12 @@ def build_system():
     
             # Always keep the mandatory base imports
             base_imports = [
-                "from langchain_core.tools import tool",
-                "from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage",
                 "from typing import Dict, List, Any, Callable, Optional, Union, TypeVar, Generic, Tuple, Set, TypedDict",
-                "from agentic_system.large_language_model import LargeLanguageModel, execute_tool_calls"
+                "from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage",
+                "from agentic_system.large_language_model import LargeLanguageModel, execute_tool_calls",
+                "from langgraph.graph import StateGraph, START, END",
+                "from langchain_core.tools import tool",
+                "import os"
             ]
             # Use a set to avoid duplicates and preserve order for non-base imports
             final_imports = base_imports + sorted(list(set(stmt.strip() for stmt in import_statements if stmt.strip() not in base_imports)))
@@ -259,9 +261,9 @@ def build_system():
 
     tools["AddEdge"] = tool(runnable=add_edge, name_or_callable="AddEdge")
 
-    # Tool: AddSystemPrompts
+    # Tool: SystemPrompt
     # Description: Adds or updates system prompts
-    def add_system_prompt(name: str, system_prompt: str) -> str:
+    def system_prompt(name: str, system_prompt: str) -> str:
         """
             Adds a system prompt to the top of the system as a constant.
             Different agents should have use different system prompts.  
@@ -274,7 +276,7 @@ def build_system():
         except Exception as e:
             return f"Error updating system prompts: {repr(e)}"
 
-    tools["AddSystemPrompt"] = tool(runnable=add_system_prompt, name_or_callable="AddSystemPrompt")
+    tools["SystemPrompt"] = tool(runnable=system_prompt, name_or_callable="SystemPrompt")
 
     # Tool: TestSystem
     # Description: Tests the target system with a given state
