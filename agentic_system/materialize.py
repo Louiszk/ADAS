@@ -55,16 +55,20 @@ def materialize_system(system, output_dir="systems"):
             if imp not in code_lines:
                 code_lines.append(imp)
     
-    code_lines.extend([
-        "",
-        "# Helper functions and constants",
-        system.helper_code if system.helper_code else "# No helper functions or constants defined yet."
-        ""
-    ])
+    if system.system_prompts:
+        code_lines.extend([
+            "",
+            "# ===== System Prompts ====="
+        ])
+        
+        for prompt_name, prompt_content in system.system_prompts.items():
+            # Handle triple quotes to avoid syntax errors
+            escaped_content = prompt_content.replace('"""', '\\"""')
+            code_lines.append(f"{prompt_name} = \"\"\"{escaped_content}\"\"\"")
+            code_lines.append("")
     
     code_lines.extend([
-        "",
-        "",
+        "# ===== Agentic System =====",
         "def build_system():",
         "    # Define state attributes for the system",
         "    class AgentState(TypedDict):",

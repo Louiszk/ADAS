@@ -258,21 +258,22 @@ def build_system():
 
     tools["AddEdge"] = tool(runnable=add_edge, name_or_callable="AddEdge")
 
-    # Tool: Helper
-    # Description: Adds or updates code in the helper file
-    def helper(code: str) -> str:
+    # Tool: AddSystemPrompts
+    # Description: Adds or updates system prompts
+    def add_system_prompt(name: str, system_prompt: str) -> str:
         """
-            Adds or updates helper functions and constants. 
-            If a helper function or constant with the same name already exists, it will be replaced.
-                code: Python code containing functions and/or constants to add to the helper section
+            Adds a system prompt to the top of the system as a constant.
+            Different agents should have use different system prompts.  
+            If a system prompt with the same name already exists, it will be replaced.
+                system_prompt: A system prompt that can be used to invoke large language models.
         """
         try:
-            target_system.add_helper_code(code)
-            return f"Helper code updated successfully"
+            target_system.add_system_prompt(name, system_prompt)
+            return f"System prompts updated successfully"
         except Exception as e:
-            return f"Error updating helper code: {repr(e)}"
+            return f"Error updating system prompts: {repr(e)}"
 
-    tools["Helper"] = tool(runnable=helper, name_or_callable="Helper")
+    tools["AddSystemPrompt"] = tool(runnable=add_system_prompt, name_or_callable="AddSystemPrompt")
 
     # Tool: TestSystem
     # Description: Tests the target system with a given state
@@ -318,7 +319,8 @@ def build_system():
             pbar.close()
 
         except Exception as e:
-            error_message = f"\n\n Error while testing the system:\n{traceback.format_exc()}"
+            location = "Iteration " + str(len(all_outputs))
+            error_message = f"\n\n Error while testing the system {location}:\n{repr(e)}"
 
         # Always capture stdout after try block
         captured_output = stdout_capture.getvalue()
@@ -327,11 +329,12 @@ def build_system():
         
         # Add captured stdout to the result
         test_result = f"Test completed.\n <SystemStates>\n{result}\n</SystemStates>"
+        std_out = ""
         if captured_output:
-            test_result += f"\n\n<Stdout>\n{captured_output}\n</Stdout>"
-
+            std_out = f"\n\n<Stdout>\n{captured_output}\n</Stdout>"
+            test_result += std_out
         if error_message:
-            raise Exception(error_message)
+            raise Exception(error_message + std_out)
         else:
             return test_result
     
@@ -382,7 +385,31 @@ def build_system():
 
     # Register tools with LargeLanguageModel class
     LargeLanguageModel.register_available_tools(tools)
+
     # ===== Node Definitions =====
+    # Node: MetaThinker
+    # Description: Meta Thinker
+    def meta_thinker_function(state: Dict[str, Any]) -> Dict[str, Any]:  
+        llm = LargeLanguageModel(temperature=0.8, wrapper="google", model_name="gemini-2.5-pro-exp-03-25")
+        messages = state.get("messages", [])
+
+        code_message = f"Current Code:\n" + materialize_system(target_system, output_dir=None)
+    
+        full_messages = [SystemMessage(content=system_prompts.meta_thinker)] + messages + [HumanMessage(content=code_message)]
+        print([getattr(last_msg, 'type', 'Unknown') for last_msg in full_messages])
+        response = llm.invoke(full_messages)
+
+        transition_message = HumanMessage(content= " \n".join([
+            "Thank you for the detailed plan. Please implement this system design step by step.",
+            "Start by setting up the state attributes, imports and install the necessary packages,",
+            "then implement each component according to the plan above."]))
+        updated_messages = messages + [response, transition_message] 
+
+        new_state = {"messages": updated_messages}
+        return new_state
+    
+    graph.add_node("MetaThinker", meta_thinker_function)
+
     # Node: MetaAgent
     # Description: Meta Agent
     def meta_agent_function(state: Dict[str, Any]) -> Dict[str, Any]:  
@@ -391,7 +418,7 @@ def build_system():
         context_length = 8*2 # even
         messages = state.get("messages", [])
         iteration = len([msg for msg in messages if isinstance(msg, AIMessage)])
-        initial_message, current_messages = messages[0], messages[1:]
+        initial_messages, current_messages = messages[:3], messages[3:]
         try:
             trimmed_messages = trim_messages(
                 current_messages,
@@ -405,15 +432,14 @@ def build_system():
 
         code_message = f"(Iteration {iteration}) Current Code:\n" + materialize_system(target_system, output_dir=None)
     
-        full_messages = [SystemMessage(content=system_prompts.meta_agent), initial_message] + trimmed_messages + [HumanMessage(content=code_message)]
+        full_messages = [SystemMessage(content=system_prompts.meta_agent)] + initial_messages + trimmed_messages + [HumanMessage(content=code_message)]
         print([getattr(last_msg, 'type', 'Unknown') for last_msg in full_messages])
         response = llm.invoke(full_messages)
 
         if not hasattr(response, 'content') or not response.content:
             response.content = "I will call the necessary tools."
         
-        code_context = "\n".join(target_system.imports) + "\n\n" + target_system.helper_code
-        decorator_tool_calls = parse_decorator_tool_calls(response.content, code_context)
+        decorator_tool_calls = parse_decorator_tool_calls(response.content)
         human_message, tool_results = execute_decorator_tool_calls(decorator_tool_calls)
 
         updated_messages = messages + [response]
@@ -460,7 +486,9 @@ def build_system():
 
     graph.add_node("EndDesign", end_design_node)
 
-    # ===== Conditional Edges =====
+    # ===== Edges =====
+    graph.add_edge("MetaThinker", "MetaAgent")
+
     # Conditional Router from: MetaAgent
     def design_completed_router(state: Dict[str, Any]) -> str:
         """Routes to EndDesign if design is completed, otherwise back to MetaAgent."""
@@ -468,11 +496,10 @@ def build_system():
             return "EndDesign"
         return "MetaAgent"
     
-
     graph.add_conditional_edges("MetaAgent", design_completed_router, {'MetaAgent': 'MetaAgent', 'EndDesign': 'EndDesign'})
 
     # ===== Entry/Exit Configuration =====
-    graph.set_entry_point("MetaAgent")
+    graph.set_entry_point("MetaThinker")
     graph.set_finish_point("EndDesign")
 
     # ===== Compilation =====

@@ -1,3 +1,64 @@
+meta_thinker = '''
+You are an expert system architect specialized in designing high-level plans for agentic systems.
+Your role is to analyze requirements and create a comprehensive system design plan before implementation.
+
+# Agentic System Architecture
+An agentic system consists of a directed graph with nodes and edges where:
+- Nodes are processing functions that handle state information
+- Edges define the flow of execution between nodes
+- The system has exactly one designated entry point and one finish point.
+- State is passed between nodes and can be modified throughout execution
+
+## Tools
+Tools are standalone functions registered with the system that agents can call.
+They must have type annotations and a docstring, so the agents know what the tool does.
+
+## Nodes
+A node is simply a Python function that processes state. There are two common patterns:
+
+1. **AI Agent Nodes**: Consist of large language models to process information and autonomously call tools.
+2. **Function Nodes**: State processors using any Python function.
+
+## Edges
+1. **Standard Edges**: Direct connections between nodes
+2. **Conditional Edges**: Branching logic from a source node using router functions (returns the next node)
+
+# Given a problem statement, your task is to:
+
+1. Analyze the problem thoroughly to understand core requirements and constraints
+2. Design a high-level architecture for an agentic system that can solve this problem
+3. Outline the key components needed (nodes, tools, edges, conditional edges, state attributes)
+4. Specify the interaction flow between components
+5. Consider edge cases and potential failure modes
+6. Provide a clear, step-by-step implementation plan
+
+Your output should be structured as follows:
+
+## Problem Analysis
+- Core requirements
+- Constraints
+- Success criteria
+
+## System Architecture
+- Overview diagram (using ASCII/text)
+- State attributes
+- Required external dependencies
+
+## Components
+- Nodes (name, purpose, key functionality)
+- Tools (name, purpose, key functionality)
+- Edges and conditional edges (flow description)
+
+## Considerations
+- Potential challenges
+- Edge cases
+- Performance considerations
+
+Be thorough but concise. Focus on providing a clear roadmap that will guide the implementation phase.
+Remember that there is a maximum number of iterations to finish the system, adjust the complexity based on this.
+Do not implement any code yet - just create the architectural plan.
+'''
+
 function_signatures = '''
 You have these decorators available for designing the system:
 ```
@@ -21,7 +82,7 @@ You have these decorators available for designing the system:
     """
         Creates a component in the target system.
             component_type: Type of component to create ('node', 'tool', or 'router')
-            name: Name of the component (for router, this is the source node name)
+            name: Name of the component to add (for router, this is the source node name)
             description: Description of the component
             Place the Python code defining the component's function below the decorator.
     """
@@ -29,9 +90,15 @@ You have these decorators available for designing the system:
     """
         Modifies an existing component's implementation.
             component_type: Type of component to edit ('node', 'tool', or 'router')
-            name: Name of the component to edit
+            name: Name of the component to edit (for router, this is the source node name)
             new_description: Optional new description for the component
             Place the new Python code for the component's function below the decorator.
+    """
+@@delete_component(component_type: str, name: str)
+    """
+        Deletes a component from the target system.
+            component_type: Type of component to delete ('node', 'tool', or 'router')
+            name: Name of the component to delete (for router, this is the source node name)
     """
 @@add_edge(source: str, target: str)
     """
@@ -39,28 +106,24 @@ You have these decorators available for designing the system:
             source: Name of the source node
             target: Name of the target node
     """
-@@delete_component(component_type: str, name: str)
-    """
-        Deletes a component from the target system.
-            component_type: Type of component to delete ('node', 'tool', or 'router')
-            name: Name of the component or source node for routers
-    """
-@@helper()
-    """
-        Adds or updates helper functions and constants.
-        If a helper function or constant with the same name already exists, it will be replaced.
-        Place the Python code containing helper functions and/or constants below the decorator.
-    """
-@@test_system(state: Dict[str, Any])
-    """
-        Executes the current system with a test input state to validate functionality.
-            state: A python dictionary with state attributes e.g. {"messages": ["Test Input"], "attr2": [3, 5]}
-    """
 @@delete_edge(source: str, target: str)
     """
         Deletes an edge between nodes.
             source: Name of the source node
             target: Name of the target node
+    """
+@@add_system_prompt(name: str, system_prompt: str)
+        """
+            Adds a system prompt to the top of the system as a constant.
+            Different agents should have different system prompts.  
+            If a system prompt with the same name already exists, it will be replaced.
+                name: Name of the system prompt constant (will be capitalized).
+                system_prompt: A system prompt that can be used to invoke large language models.
+        """
+@@test_system(state: Dict[str, Any])
+    """
+        Executes the current system with a test input state to validate functionality.
+            state: A python dictionary with state attributes e.g. {"messages": ["Test Input"], "attr2": [3, 5]}
     """
 @@end_design()
     """
@@ -100,9 +163,8 @@ def node_function(state):
 The code-related decorators include:
 - @@add_component - Place the component function implementation below it
 - @@edit_component - Place the new function implementation below it
-- @@helper - Place the helper functions or constants below it
 
-For router (conditional edge) components, use the add_component decorator with component_type="router":
+For routers (conditional edges), use the decorator with component_type="router" and always name it the same as the source node:
 ```
 @@add_component(component_type = "router", name = "SourceNode", description = "Routes to different nodes based on some condition")
 def router_function(state):
@@ -143,7 +205,7 @@ They must have type annotations and a docstring, so the agents know what the too
 ```python
 # Example
 def tool_function(arg1: str, arg2: int, ...) -> List[Any]:
-    """Tool to retrieve values from an API
+    """Tool to retrieve values
     
     [descriptions of the inputs]
     [description of the outputs]
@@ -152,7 +214,8 @@ def tool_function(arg1: str, arg2: int, ...) -> List[Any]:
     return result
 ```
 
-Tools are NOT nodes in the graph - they are invoked directly by agents when needed.
+Tools are NOT nodes in the graph - they are separate functions.
+You can also call tools in nodes to separate concerns and keep the node's code organized.
 
 ## Nodes
 A node is simply a Python function that processes state. There are two common patterns:
@@ -162,7 +225,7 @@ A node is simply a Python function that processes state. There are two common pa
 # Example
 def agent_node(state):
     llm = LargeLanguageModel(temperature=0.4)
-    system_prompt = SYSTEM_PROMPT_AGENT1 # Task of that agent, constant added to helpers.
+    system_prompt = SYSTEM_PROMPT_AGENT1 # constant added to System Prompts section.
     # Optionally bind tools that this agent can use
     # This will automatically instruct the agent based on the tools docstrings
     llm.bind_tools(["Tool1", "Tool2"])
@@ -196,13 +259,10 @@ def function_node(state):
     new_state["some_key"] = some_value
     return new_state
 ```
-Besides `execute_tool_calls()` (the recommended method for agents), you can also execute tools with:
-`tools["Tool1"].invoke(args)` where `tools` is a prebuilt global dictionary that holds all tools you defined.
-There are only these two possibilities to run tools. You can not call the tool functions directly.
 
 ## Edges
 1. **Standard Edges**: Direct connections between nodes
-2. **Conditional Edges/Routers**: Branching logic from a source node using router functions:
+2. **Conditional Edges**: Branching logic from a source node using router functions:
 ```python
 # Example
 def router_function(state):
@@ -212,6 +272,8 @@ def router_function(state):
         return "ErrorHandlerNode"
     return "ProcessingNode"
 ```
+
+Routers are Conditional Edges, NOT nodes in the graph - they are always attached to a source node.
 
 ## State Management
 - The system maintains a state dictionary passed between nodes
@@ -234,7 +296,7 @@ Analyze the problem statement to identify key requirements, constraints and succ
 - All functions should be defined with 'def', do not use lambda functions.
 - The directed graph should NOT include dead ends or endless loops, where it is not possible to reach the finish point
 - The system should be fully functional, DO NOT use any placeholder logic in functions or tools
-- Keep the code organized and clean using helper functions and constants.
+- Keep the code organized and clean
 
 For each step of the implementation process:
 - Analyze what has been implemented so far in the current code and what needs to be done next

@@ -32,8 +32,7 @@ class VirtualAgenticSystem:
         
         self.state_attributes = {"messages": "List[Any]"}
         
-        # For helper file functionality
-        self.helper_code = ""
+        self.system_prompts = {} # constant name -> system prompt
         
     def set_state_attributes(self, attrs):
         self.state_attributes = {"messages": "List[Any]"}
@@ -182,51 +181,17 @@ class VirtualAgenticSystem:
         else:
             return f"Error: Function '{function_name}' not found after execution"
     
-    def add_helper_code(self, new_code: str) -> bool:
+    def add_system_prompt(self, name: str, system_prompt: str) -> bool:
         """
-        Adds or updates helper functions and constants using AST parsing.
-        If a function or constant with the same name already exists at the top level,
-        it will be replaced. Preserves other existing code.
+            Adds a system prompt to the top of the system as a constant.  
+            If a system prompt with the same name already exists, it will be replaced.
         """
-        dedented_new_code = textwrap.dedent(new_code).strip()
-
-        if re.search(r"def\s+build_system\s*\(", dedented_new_code):
-            raise ValueError("Helper code cannot contain 'build_system' function definition.")
-
-        if not dedented_new_code:
-            return True
-
-        try:
-            new_ast = ast.parse(dedented_new_code)
-            names_to_replace = _extract_top_level_names(new_ast)
-        except SyntaxError as e:
-            raise ValueError(f"Syntax error in new helper code: {e}") from e
-
-        dedented_existing_code = textwrap.dedent(self.helper_code).strip()
-
-        if not dedented_existing_code:
-            self.helper_code = ast.unparse(new_ast)
-            return True
-
-        try:
-            existing_ast = ast.parse(dedented_existing_code)
-        except SyntaxError as e:
-            raise ValueError(f"Syntax error in existing helper code, cannot merge: {e}") from e
-
-        transformer = RemoveDefinitionsTransformer(names_to_replace)
-        modified_existing_ast = transformer.visit(existing_ast)
-
-        if not isinstance(modified_existing_ast, ast.Module):
-             raise TypeError("AST transformation did not return a Module node.")
-
-        final_body = modified_existing_ast.body + new_ast.body
-        final_ast = ast.Module(body=final_body, type_ignores=[])
-
-        try:
-            self.helper_code = ast.unparse(final_ast)
-        except Exception as e:
-            raise RuntimeError(f"Failed to unparse combined helper code AST: {e}") from e
-
+        if not isinstance(name, str) or not isinstance(system_prompt, str):
+            raise TypeError("Both name and system_prompt must be strings")
+        
+        name = name.upper()
+            
+        self.system_prompts[name] = system_prompt
         return True
 
     def _auto_path_map(self, function_code):
@@ -241,38 +206,3 @@ class VirtualAgenticSystem:
             auto_path_map["END"] = END
     
         return auto_path_map
-    
-def _extract_top_level_names(ast_module: ast.Module) -> set[str]:
-    names = set()
-    for node in ast_module.body:
-        if isinstance(node, ast.FunctionDef):
-            names.add(node.name)
-        elif isinstance(node, ast.Assign):
-            for target in node.targets:
-                if isinstance(target, ast.Name):
-                    names.add(target.id)
-        elif isinstance(node, ast.AnnAssign):
-            if isinstance(node.target, ast.Name):
-                names.add(node.target.id)
-    return names
-
-class RemoveDefinitionsTransformer(ast.NodeTransformer):
-    def __init__(self, names_to_remove: set[str]):
-        self.names_to_remove = names_to_remove
-        super().__init__()
-
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST | None:
-        if node.name in self.names_to_remove:
-            return None
-        return self.generic_visit(node)
-
-    def visit_Assign(self, node: ast.Assign) -> ast.AST | None:
-        for target in node.targets:
-            if isinstance(target, ast.Name) and target.id in self.names_to_remove:
-                return None
-        return self.generic_visit(node)
-
-    def visit_AnnAssign(self, node: ast.AnnAssign) -> ast.AST | None:
-        if isinstance(node.target, ast.Name) and node.target.id in self.names_to_remove:
-            return None
-        return self.generic_visit(node)
