@@ -61,6 +61,7 @@ Options:
 - `--problem`: Problem statement to solve
 - `--reinstall`: Reinstall dependencies (should be set for the first start)
 - `--optimize-system`: Name of existing system to optimize
+- `--materialize`: Materialize meta system
 - `--no-keep-template`: Do not keep the docker image template
 
 - Some examples are in system_ideas.txt

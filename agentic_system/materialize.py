@@ -42,6 +42,7 @@ def materialize_system(system, output_dir="systems"):
     """Generate Python code representation of the system."""
     nodes_count = len(system.nodes)
     tool_count = len(system.tools)
+    escaped_name = system.system_name.replace("/", "").replace("\\", "").replace(":", "")
     
     code_lines = [
         f"# {system.system_name} System Configuration",
@@ -60,19 +61,14 @@ def materialize_system(system, output_dir="systems"):
             if imp not in code_lines:
                 code_lines.append(imp)
     
-    if system.system_prompts:
-        code_lines.extend([
-            "",
-            "# ===== System Prompts ====="
-        ])
-        
-        for prompt_name, prompt_content in system.system_prompts.items():
-            # Handle triple quotes to avoid syntax errors
-            escaped_content = prompt_content.replace('"""', '\\"""')
-            code_lines.append(f"{prompt_name} = \"\"\"{escaped_content}\"\"\"")
-            code_lines.append("")
+    if system.system_prompt_code:
+        if output_dir:
+            code_lines.append(f"from {output_dir.split('/')[-1]}.{escaped_name}_system_prompts import *")
+        else:
+            code_lines.append(f"from agentic_system.{escaped_name}_system_prompts import *")
     
     code_lines.extend([
+        "",
         "# ===== Agentic System =====",
         "def build_system():",
         "    # Define state attributes for the system",
@@ -120,8 +116,11 @@ def materialize_system(system, output_dir="systems"):
                 ""
             ])
 
-        code_lines.append("    # Register tools with LargeLanguageModel class")
-        code_lines.append("    LargeLanguageModel.register_available_tools(tools)")
+        code_lines.extend([
+            "    # Register tools with LargeLanguageModel class",
+            "    LargeLanguageModel.register_available_tools(tools)",
+            ""
+        ])
     
     # Node definitions
     if system.nodes:
@@ -203,10 +202,22 @@ def materialize_system(system, output_dir="systems"):
 
     code = "\n".join(code_lines)
     
+    prompt_code = ""
+    if system.system_prompt_code:
+        prompt_code = system.system_prompt_code
+
+    # --- Write Files ---
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
-        filename = os.path.join(output_dir, system.system_name.replace("/", "_").replace("\\", "_").replace(":", "_") + ".py")
-        with open(filename, "w") as f:
+        filename = os.path.join(output_dir, escaped_name + ".py")
+        with open(filename, "w", encoding='utf-8') as f:
             f.write(code)
-        
-    return code
+
+        system_prompt_filename = os.path.join(output_dir, f"{escaped_name}_system_prompts.py")
+    else:
+        system_prompt_filename = os.path.join("sandbox/workspace/agentic_system", f"{escaped_name}_system_prompts.py")
+    if prompt_code:
+        with open(system_prompt_filename, "w", encoding='utf-8') as f:
+            f.write(prompt_code)
+
+    return code, prompt_code

@@ -142,14 +142,12 @@ You have these decorators available for designing the system:
             source: Name of the source node
             target: Name of the target node
     """
-@@system_prompt(name: str, system_prompt: str)
-        """
-            Adds a system prompt to the top of the system as a constant.
-            If a system prompt with the same name already exists, it will be replaced.
-            Different agents should have different system prompts.  
-                name: Name of the system prompt constant (will be capitalized).
-                system_prompt: A system prompt that can be used to invoke large language models.
-        """
+@@system_prompt()
+    """
+        Adds a system prompt to the system_prompts file. Can be either a constant or a function that returns the system prompt.
+        If a constant or function with the same name already exists in the file, it will be replaced.
+        Place the constant and/or function implementation below the decorator.
+    """
 @@test_system(state: Dict[str, Any])
     """
         Executes the current system with a test input state to validate functionality.
@@ -190,9 +188,20 @@ def node_function(state):
     return {"messages": messages}
 ```
 
+```
+@@system_prompt()
+# constant system prompt
+AGENT1_PROMPT = '''...'''
+
+# dynamic system prompt as function
+def agent2_prompt(value):
+    return f'''...{value}...'''
+```
+
 The code-related decorators include:
 - @@add_component - Place the component function implementation below it
 - @@edit_component - Place the new function implementation below it
+- @@system_prompt - Place the constant or function implementation below it
 
 For routers (conditional edges), use the decorator with component_type="router" and always name it the same as the source node:
 ```
@@ -266,7 +275,7 @@ You are deeply familiar with advanced prompting techniques and Python programmin
 ''' + decorator_tool_prompt + '''
 
 ### **IMPORTANT WORKFLOW RULES**:
-- First set the necessary state attributes, other attributes cannot be accessed
+- First set the necessary state attributes, other attributes cannot be accessed and you will get a KeyError
 - Always test before ending the design process
 - Only end the design process when all tests work
 - Set workflow endpoints before testing

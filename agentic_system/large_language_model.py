@@ -32,7 +32,8 @@ def parse_decorator_tool_calls(text):
     # Code-related tools that need special handling
     code_related_tools = {
         'add_component': 'function_code',
-        'edit_component': 'new_function_code'
+        'edit_component': 'new_function_code',
+        'system_prompt': 'system_prompt_code'
     }
     
     # Extract code blocks

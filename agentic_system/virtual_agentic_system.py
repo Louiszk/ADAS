@@ -1,4 +1,6 @@
 import re
+import ast
+import textwrap
 from langgraph.graph import START, END
 
 class VirtualAgenticSystem:
@@ -21,9 +23,9 @@ class VirtualAgenticSystem:
         
         self.packages = ["langchain-core 0.3.45", "langgraph 0.3.5"]
         self.imports = [
+            "from agentic_system.large_language_model import LargeLanguageModel, parse_decorator_tool_calls, execute_decorator_tool_calls",
             "from typing import Dict, List, Any, Callable, Optional, Union, TypeVar, Generic, Tuple, Set, TypedDict",
-            "from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage",
-            "from agentic_system.large_language_model import LargeLanguageModel, execute_tool_calls",
+            "from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage, trim_messages",
             "from langgraph.graph import StateGraph, START, END",
             "from langchain_core.tools import tool",
             "import os"
@@ -31,7 +33,7 @@ class VirtualAgenticSystem:
         
         self.state_attributes = {"messages": "List[Any]"}
         
-        self.system_prompts = {} # constant name -> system prompt
+        self.system_prompt_code = ""
         
     def set_state_attributes(self, attrs):
         self.state_attributes = {"messages": "List[Any]"}
@@ -179,18 +181,52 @@ class VirtualAgenticSystem:
             return new_function
         else:
             return f"Error: Function '{function_name}' not found after execution"
-    
-    def add_system_prompt(self, name: str, system_prompt: str) -> bool:
+
+    def add_system_prompt(self, new_code: str) -> bool:
         """
-            Adds a system prompt to the top of the system as a constant.  
-            If a system prompt with the same name already exists, it will be replaced.
+        Adds or updates functions and constants using AST parsing.
+        If a function or constant with the same name already exists at the top level,
+        it will be replaced. Preserves other existing code.
         """
-        if not isinstance(name, str) or not isinstance(system_prompt, str):
-            raise TypeError("Both name and system_prompt must be strings")
-        
-        name = name.upper()
-            
-        self.system_prompts[name] = system_prompt
+        dedented_new_code = textwrap.dedent(new_code).strip()
+
+        if re.search(r"def\s+build_system\s*\(", dedented_new_code):
+            raise ValueError("system_prompt code cannot contain 'build_system' function definition.")
+
+        if not dedented_new_code:
+            return True
+
+        try:
+            new_ast = ast.parse(dedented_new_code)
+            names_to_replace = _extract_top_level_names(new_ast)
+        except SyntaxError as e:
+            raise ValueError(f"Syntax error in new system_prompt code: {e}") from e
+
+        dedented_existing_code = textwrap.dedent(self.system_prompt_code).strip()
+
+        if not dedented_existing_code:
+            self.system_prompt_code = ast.unparse(new_ast)
+            return True
+
+        try:
+            existing_ast = ast.parse(dedented_existing_code)
+        except SyntaxError as e:
+            raise ValueError(f"Syntax error in existing system_prompt code, cannot merge: {e}") from e
+
+        transformer = RemoveDefinitionsTransformer(names_to_replace)
+        modified_existing_ast = transformer.visit(existing_ast)
+
+        if not isinstance(modified_existing_ast, ast.Module):
+             raise TypeError("AST transformation did not return a Module node.")
+
+        final_body = modified_existing_ast.body + new_ast.body
+        final_ast = ast.Module(body=final_body, type_ignores=[])
+
+        try:
+            self.system_prompt_code = ast.unparse(final_ast)
+        except Exception as e:
+            raise RuntimeError(f"Failed to unparse combined system_prompt code AST: {e}") from e
+
         return True
 
     def _auto_path_map(self, function_code):
@@ -205,3 +241,38 @@ class VirtualAgenticSystem:
             auto_path_map["END"] = END
     
         return auto_path_map
+    
+def _extract_top_level_names(ast_module: ast.Module) -> set[str]:
+    names = set()
+    for node in ast_module.body:
+        if isinstance(node, ast.FunctionDef):
+            names.add(node.name)
+        elif isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    names.add(target.id)
+        elif isinstance(node, ast.AnnAssign):
+            if isinstance(node.target, ast.Name):
+                names.add(node.target.id)
+    return names
+
+class RemoveDefinitionsTransformer(ast.NodeTransformer):
+    def __init__(self, names_to_remove: set[str]):
+        self.names_to_remove = names_to_remove
+        super().__init__()
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST | None:
+        if node.name in self.names_to_remove:
+            return None
+        return self.generic_visit(node)
+
+    def visit_Assign(self, node: ast.Assign) -> ast.AST | None:
+        for target in node.targets:
+            if isinstance(target, ast.Name) and target.id in self.names_to_remove:
+                return None
+        return self.generic_visit(node)
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> ast.AST | None:
+        if isinstance(node.target, ast.Name) and node.target.id in self.names_to_remove:
+            return None
+        return self.generic_visit(node)
