@@ -3,7 +3,7 @@ agentic_system_prompt = '''
 An agentic system consists of a directed graph with nodes and edges where:
 - Nodes are processing functions that handle state information
 - Edges define the flow of execution between nodes
-- The system has exactly one designated entry point and one finish point.
+- The system has exactly one designated entry point (START) and one finish point (END).
 - State is passed between nodes and can be modified throughout execution
 
 ## Tools
@@ -44,7 +44,7 @@ def agent_node(state):
     # Invoke the LargeLanguageModel with required information
     response = llm.invoke(full_messages)
 
-    # execute the tool calls from the agent's response
+    # Execute the tool calls from the agent's response with this designated helper function
     tool_messages, tool_results = execute_tool_calls(response)
     
     # You can now use tool_results programmatically if needed
@@ -79,14 +79,14 @@ def router_function(state):
         return "ErrorHandlerNode"
     return "ProcessingNode"
 ```
-
-Routers are Conditional Edges, NOT nodes in the graph - they are always attached to a source node.
+Router is a synonym for Conditional Edge.
 
 ## State Management
 - The system maintains a state dictionary passed between nodes
 - Default state includes {'messages': 'List[Any]'} for communication
 - Custom state attributes can be defined with type annotations
-- State is accessible to all components throughout execution
+- State is accessible to all components throughout execution, 
+    but all attributes must be defined in advance, dynamically set state attributes cannot be accessed.
 '''
 
 function_signatures = '''
@@ -212,6 +212,7 @@ def router_function(state):
         return "NodeA"
     return "NodeB"
 ```
+This will add a conditional edge from SourceNode to NodeA or NodeB based on some_condition.
 
 Use START and END as special node names for setting entry and exit points:
 ```
@@ -275,11 +276,11 @@ You are deeply familiar with advanced prompting techniques and Python programmin
 ''' + decorator_tool_prompt + '''
 
 ### **IMPORTANT WORKFLOW RULES**:
-- First set the necessary state attributes, other attributes cannot be accessed and you will get a KeyError
+- First set the necessary state attributes, other attributes cannot be accessed
 - Always test before ending the design process
 - Only end the design process when all tests work
 - Set workflow endpoints before testing
-- All functions should be defined with 'def', do not use lambda functions.
+- All functions should be defined with 'def', do not use lambda functions
 - The directed graph should NOT include dead ends or endless loops, where it is not possible to reach the finish point
 - The system should be fully functional, DO NOT use any placeholder logic in functions or tools
 - Keep the code organized and clean
