@@ -3,7 +3,7 @@ from langgraph.graph import START, END
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import ToolMessage, HumanMessage, SystemMessage
-from agentic_system.utils import extract_parenthesized_content
+from agentic_system.utils import extract_parenthesized_content, find_code_blocks
 from dotenv import load_dotenv
 import re
 
@@ -37,7 +37,7 @@ def parse_decorator_tool_calls(text):
     }
     
     # Extract code blocks
-    code_blocks = re.findall(r'^```(.*?)\n```', text, re.DOTALL | re.MULTILINE)
+    code_blocks = find_code_blocks(text)
     if not code_blocks:
         print("No code blocks found!")
     

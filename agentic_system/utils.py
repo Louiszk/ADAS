@@ -95,3 +95,62 @@ def extract_parenthesized_content(lines, start_line_idx, start_pos):
             break
     
     return "\n".join(content), line_idx - 1
+
+def find_code_blocks(text: str) -> list[str]:
+    """
+    Finds code blocks delimited by triple backticks (```) potentially on their own lines.
+    It ignores triple backticks when they appear inside multi-line triple-quoted strings.
+    """
+    lines = text.splitlines()
+    code_blocks = []
+    current_block_lines = []
+    in_code_block = False
+    in_triple_string = False
+    triple_string_delimiter = None # Will store '"""' or "'''"
+
+    for i, line in enumerate(lines):
+        is_delimiter_line = line.strip().startswith('```')
+        effective_line_content = line
+        start_search_pos = 0
+
+        while True:
+            next_triple_double = effective_line_content.find('"""', start_search_pos)
+            next_triple_single = effective_line_content.find("'''", start_search_pos)
+
+            # Find the earliest triple quote delimiter
+            if next_triple_double != -1 and (next_triple_single == -1 or next_triple_double < next_triple_single):
+                delim_pos = next_triple_double
+                current_delim = '"""'
+            elif next_triple_single != -1:
+                delim_pos = next_triple_single
+                current_delim = "'''"
+            else:
+                break
+
+            if in_triple_string:
+                if current_delim == triple_string_delimiter:
+                    in_triple_string = False
+                    triple_string_delimiter = None
+            else:
+                in_triple_string = True
+                triple_string_delimiter = current_delim
+
+            # Continue searching
+            start_search_pos = delim_pos + 3
+
+        if is_delimiter_line and not in_triple_string:
+            if not in_code_block:
+                # Start of a new code block
+                in_code_block = True
+                current_block_lines = []
+            else:
+                # End of the current code block
+                in_code_block = False
+                if current_block_lines:
+                    code_blocks.append("\n".join(current_block_lines))
+                # Reset for potential next block
+                current_block_lines = []
+        elif in_code_block:
+            current_block_lines.append(line)
+
+    return code_blocks
