@@ -1,6 +1,7 @@
 import re
 import ast
 import textwrap
+import inspect
 from langgraph.graph import START, END
 
 class VirtualAgenticSystem:
@@ -50,6 +51,8 @@ class VirtualAgenticSystem:
             func.__doc__ = description
         if source_code:
             func._source_code = source_code
+        else:
+            func._source_code = inspect.getsource(func)
             
         self.nodes[name] = description
         self.node_functions[name] = func
@@ -62,6 +65,8 @@ class VirtualAgenticSystem:
             raise ValueError("Tool function must contain a docstring.")
         if source_code:
             func._source_code = source_code
+        else:
+            func._source_code = inspect.getsource(func)
             
         self.tools[name] = description
         self.tool_functions[name] = func
@@ -96,6 +101,8 @@ class VirtualAgenticSystem:
         
         if condition_code:
             condition._source_code = condition_code
+        else:
+            condition._source_code = inspect.getsource(condition)
         
         edge_info = {"condition": condition}
         

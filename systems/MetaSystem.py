@@ -291,14 +291,19 @@ def build_system():
 
     # Tool: TestSystem
     # Description: Tests the target system with a given state
-    def test_system(state: Dict[str, Any]) -> str:
+    def test_system() -> str:
         """
-            Executes the current system with a test input state to validate functionality.
-                state: A python dictionary with state attributes e.g. {"messages": ["Test Input"], "attr2": [3, 5]}
+            Executes the current system with a simple test input state to validate functionality.
         """
         all_outputs = []
         error_message = ""
         stdout_capture = io.StringIO()
+        test_state = {"messages": [HumanMessage("\n".join([
+            'Design a very simple system that receives a list of integers and computes their sum.',
+            'Test the system with a state like this: {"messages": [], "list_of_integers": [9, 7, 5]}.',
+            'The final state of the system should include "solution": 21.',
+            "Therefore, the system's state must contain the attributes: 'list_of_integers': List[int] and 'solution': int."
+        ]))]}
     
         try:
             source_code, _ = materialize_system(target_system, output_dir=None)
@@ -314,7 +319,7 @@ def build_system():
                 target_workflow, _ = namespace['build_system']()
                 pbar = tqdm(desc="Testing the System")
     
-                for output in target_workflow.stream(state, config={"recursion_limit": 20}):
+                for output in target_workflow.stream(test_state, config={"recursion_limit": 20}):
                     output["messages"] = clean_messages(output)
                     all_outputs.append(output)
                     pbar.update(1)
@@ -467,7 +472,7 @@ def build_system():
                         test_passed_recently = False
                         break
     
-            if test_passed_recently or iteration >= 58:
+            if test_passed_recently or iteration >= 118:
                 design_completed = True
             else:
                 if human_message and "Ending the design process..." in human_message.content:

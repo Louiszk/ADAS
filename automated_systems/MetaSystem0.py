@@ -1,60 +1,50 @@
-import re
+# MetaSystem0 System Configuration
+# Total nodes: 3
+# Total tools: 11
+
+# Already installed packages
+# langchain-core 0.3.45
+# langgraph 0.3.5
+
+from agentic_system.large_language_model import LargeLanguageModel, parse_decorator_tool_calls, execute_decorator_tool_calls
+from typing import Dict, List, Any, Callable, Optional, Union, TypeVar, Generic, Tuple, Set, TypedDict
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage, trim_messages
+from langgraph.graph import StateGraph, START, END
+from langchain_core.tools import tool
 import os
-import sys
-import dill as pickle
-import inspect
-from tqdm import tqdm
-import subprocess
-import io
-import json
-import contextlib
-from langgraph.graph import START, END
-from typing import Dict, List, Any, Optional, Union
-from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, AIMessage, trim_messages
-from agentic_system.large_language_model import LargeLanguageModel
-from agentic_system.virtual_agentic_system import VirtualAgenticSystem
 from agentic_system.materialize import materialize_system
 from agentic_system.utils import get_filtered_packages, clean_messages
-from systems.system_prompts import *
+from tqdm import tqdm
+import dill as pickle
+import re
+import io
+import contextlib
+import sys
+import subprocess
+target_agentic_system = None
+from automated_systems.MetaSystem0_system_prompts import *
 
-def create_meta_system():
-    print(f"\n----- Creating Meta System -----\n")
-    
-    # Create a virtual agentic system
-    meta_system = VirtualAgenticSystem("MetaSystem")
-    target_system = None
-    
-    with open("systems/system_prompts.py", "r") as spf:
-        system_prompts_content = spf.read()
-    meta_system.add_system_prompt(system_prompts_content)
-    meta_system.set_state_attributes({"design_completed": "bool"})
-    
-    # Add imports
-    imports = [
-        "from agentic_system.materialize import materialize_system",
-        "from agentic_system.utils import get_filtered_packages, clean_messages",
-        "from tqdm import tqdm",
-        "import dill as pickle",
-        "import re",
-        "import io",
-        "import contextlib",
-        "import sys",
-        "import subprocess",
-        "target_system = None"
-    ]
-    
-    for import_stmt in imports:
-        meta_system.add_imports(import_stmt)
-    
-    # Create all tool functions
-    
-    # PipInstall tool
+# ===== Agentic System =====
+def build_system():
+    # Define state attributes for the system
+    class AgentState(TypedDict):
+        messages: List[Any]
+        design_completed: bool
+
+    # Initialize graph with state
+    graph = StateGraph(AgentState)
+
+    # Tool definitions
+    # ===== Tool Definitions =====
+    tools = {}
+    # Tool: PipInstall
+    # Description: Securely installs a Python package using pip
     def pip_install(package_name: str) -> str:
         """
             Securely installs a Python package using pip.
                 package_name: Name of the package to install e.g. "langgraph==0.3.5"
         """
-
+    
         exclude_packages = [
             "datasets", "docker", "grpcio-status", "langchain-google-genai", "langchain-openai", "wheel",
             "llm-sandbox", "pip", "dill", "podman", "python-dotenv", "setuptools"
@@ -63,7 +53,7 @@ def create_meta_system():
         valid_pattern = r'^[a-zA-Z0-9._-]+(\s*[=<>!]=\s*[0-9a-zA-Z.]+)?$'
     
         if not re.match(valid_pattern, package_name):
-            return f"!!Error: Invalid package name format. Package name '{package_name}' contains invalid characters."
+            return f"Error: Invalid package name format. Package name '{package_name}' contains invalid characters."
         if any((ep in package_name for ep in exclude_packages + ["langgraph", "langchain-core"])):
             return f"{package_name} is already installed."
     
@@ -77,21 +67,19 @@ def create_meta_system():
             )
     
             if process.returncode == 0:
-                target_system.packages = get_filtered_packages(exclude_packages) + ["langchain-core 0.3.45"]
+                target_agentic_system.packages = get_filtered_packages(exclude_packages) + ["langchain-core 0.3.45"]
                 return f"Successfully installed {package_name}"
             else:
-                return f"!!Error installing {package_name}:\n{process.stdout}"
+                return f"Error installing {package_name}:\n{process.stdout}"
     
         except Exception as e:
-            return f"!!Error installing {package_name}: {str(e)}"
+            return f"Installation failed: {str(e)}"
     
-    meta_system.create_tool(
-        "PipInstall",
-        "Securely installs a Python package using pip",
-        pip_install
-    )
 
-    # SetImports tool
+    tools["PipInstall"] = tool(runnable=pip_install, name_or_callable="PipInstall")
+
+    # Tool: SetImports
+    # Description: Sets the list of necessary import statements for the target system, replacing existing custom imports.
     def set_imports(import_statements: List[str]) -> str:
         """
             Sets the list of import statements for the target system. This replaces any existing imports.
@@ -102,11 +90,11 @@ def create_meta_system():
             # Basic validation for each statement
             for stmt in import_statements:
                 if not isinstance(stmt, str) or not (stmt.startswith("import ") or stmt.startswith("from ")):
-                    return f"!!Error: Invalid import statement format: '{stmt}'. Must start with 'import' or 'from'."
+                    return f"Error: Invalid import statement format: '{stmt}'. Must start with 'import' or 'from'."
     
             # Always keep the mandatory base imports
             base_imports = [
-                "from agentic_system.large_language_model import LargeLanguageModel",
+                "from agentic_system.large_language_model import LargeLanguageModel, parse_decorator_tool_calls, execute_decorator_tool_calls",
                 "from typing import Dict, List, Any, Callable, Optional, Union, TypeVar, Generic, Tuple, Set, TypedDict",
                 "from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage",
                 "from langgraph.graph import StateGraph, START, END",
@@ -116,18 +104,16 @@ def create_meta_system():
             # Use a set to avoid duplicates and preserve order for non-base imports
             final_imports = base_imports + sorted(list(set(stmt.strip() for stmt in import_statements if stmt.strip() not in base_imports)))
     
-            target_system.imports = final_imports
-            return f"Import statements set successfully for target system. Total imports: {len(target_system.imports)}."
+            target_agentic_system.imports = final_imports
+            return f"Import statements set successfully for target system. Total imports: {len(target_agentic_system.imports)}."
         except Exception as e:
-            return f"!!Error setting imports: {repr(e)}"
+            return f"Error setting imports: {repr(e)}"
     
-    meta_system.create_tool(
-        "SetImports",
-        "Sets the list of necessary import statements for the target system, replacing existing custom imports.",
-        set_imports
-    )
 
-    # SetStateAttributes tool
+    tools["SetImports"] = tool(runnable=set_imports, name_or_callable="SetImports")
+
+    # Tool: SetStateAttributes
+    # Description: Sets state attributes with type annotations for the target system
     def set_state_attributes(attributes: Dict[str, str]) -> str:
         """
             Defines state attributes accessible throughout the system. Only defines the type annotations, not the values.
@@ -135,18 +121,16 @@ def create_meta_system():
                 {"messages": "List[Any]"} is the default and will be set automatically.
         """
         try:
-            target_system.set_state_attributes(attributes)
+            target_agentic_system.set_state_attributes(attributes)
             return f"State attributes set successfully: {attributes}"
         except Exception as e:
-            return f"!!Error setting state attributes: {repr(e)}"
+            return f"Error setting state attributes: {repr(e)}"
     
-    meta_system.create_tool(
-        "SetStateAttributes",
-        "Sets state attributes with type annotations for the target system",
-        set_state_attributes
-    )
 
-    # AddComponent tool
+    tools["SetStateAttributes"] = tool(runnable=set_state_attributes, name_or_callable="SetStateAttributes")
+
+    # Tool: AddComponent
+    # Description: Adds a component (node, tool, or router) to the target system
     def add_component(component_type: str, name: str, description: str, function_code: str = None) -> str:
         """
             Creates a component in the target system.
@@ -157,43 +141,41 @@ def create_meta_system():
         """
         try:
             if component_type.lower() not in ["node", "tool", "router"]:
-                return f"!!Error: Invalid component type '{component_type}'. Must be 'node', 'tool', or 'router'."
-            
+                return f"Error: Invalid component type '{component_type}'. Must be 'node', 'tool', or 'router'."
+    
             if not function_code:
-                return f"!!Error: function_code is required for all component types"
-                
+                return f"Error: function_code is required for all component types"
+    
             # Get the function implementation from the code
-            func = target_system.get_function(function_code)
-            if isinstance(func, str) and func.startswith("!!Error"):
+            func = target_agentic_system.get_function(function_code)
+            if isinstance(func, str) and func.startswith("Error"):
                 return func  # Return the error
-                
+    
             if component_type.lower() == "node":
-                target_system.create_node(name, description, func, function_code)
+                target_agentic_system.create_node(name, description, func, function_code)
                 return f"Node '{name}' created successfully"
-                
+    
             elif component_type.lower() == "tool":
-                target_system.create_tool(name, description, func, function_code)
+                target_agentic_system.create_tool(name, description, func, function_code)
                 return f"Tool '{name}' created successfully"
-                
+    
             elif component_type.lower() == "router":
-                target_system.create_conditional_edge(
+                target_agentic_system.create_conditional_edge(
                     source=name,
                     condition=func,
                     condition_code=function_code
                 )
-                
-                return f"Conditional edge from '{name}' added successfully"
-                
-        except Exception as e:
-            return f"!!Error creating {component_type}: {repr(e)}"
     
-    meta_system.create_tool(
-        "AddComponent",
-        "Adds a component (node, tool, or router) to the target system",
-        add_component
-    )
+                return f"Conditional edge from '{name}' added successfully"
+    
+        except Exception as e:
+            return f"Error creating {component_type}: {repr(e)}"
+    
 
-    # EditComponent tool
+    tools["AddComponent"] = tool(runnable=add_component, name_or_callable="AddComponent")
+
+    # Tool: EditComponent
+    # Description: Edits a component's implementation
     def edit_component(component_type: str, name: str, new_function_code: str, new_description: Optional[str] = None) -> str:
         """
             Modifies an existing component's implementation.
@@ -204,48 +186,46 @@ def create_meta_system():
         """
         try:
             if component_type.lower() not in ["node", "tool", "router"]:
-                return f"!!Error: Invalid component type '{component_type}'. Must be 'node', 'tool', or 'router'."
-                
-            new_function = target_system.get_function(new_function_code)
+                return f"Error: Invalid component type '{component_type}'. Must be 'node', 'tool', or 'router'."
+    
+            new_function = target_agentic_system.get_function(new_function_code)
             if isinstance(new_function, str) and new_function.startswith("Error"):
                 return new_function  # Return the error
-                
+    
             if component_type.lower() == "node":
-                if name not in target_system.nodes:
-                    return f"!!Error: Node '{name}' not found"
-                
-                target_system.create_node(name, new_description, new_function, new_function_code)
+                if name not in target_agentic_system.nodes:
+                    return f"Error: Node '{name}' not found"
+    
+                target_agentic_system.create_node(name, new_description, new_function, new_function_code)
                 return f"Node '{name}' updated successfully"
-                
+    
             elif component_type.lower() == "tool":
-                if name not in target_system.tools:
-                    return f"!!Error: Tool '{name}' not found"
-                
-                target_system.create_tool(name, new_description, new_function, new_function_code)
+                if name not in target_agentic_system.tools:
+                    return f"Error: Tool '{name}' not found"
+    
+                target_agentic_system.create_tool(name, new_description, new_function, new_function_code)
                 return f"Tool '{name}' updated successfully"
-                
+    
             elif component_type.lower() == "router":
-                if name not in target_system.conditional_edges:
-                    return f"!!Error: Router for node '{name}' not found"
-                    
-                target_system.create_conditional_edge(
+                if name not in target_agentic_system.conditional_edges:
+                    return f"Error: Router for node '{name}' not found"
+    
+                target_agentic_system.create_conditional_edge(
                     source=name,
                     condition=new_function,
                     condition_code=new_function_code
                 )
-                
-                return f"Router for node '{name}' updated successfully"
-                
-        except Exception as e:
-            return f"!!Error editing {component_type}: {repr(e)}"
     
-    meta_system.create_tool(
-        "EditComponent",
-        "Edits a component's implementation",
-        edit_component
-    )
+                return f"Router for node '{name}' updated successfully"
+    
+        except Exception as e:
+            return f"Error editing {component_type}: {repr(e)}"
+    
 
-    # DeleteComponent tool
+    tools["EditComponent"] = tool(runnable=edit_component, name_or_callable="EditComponent")
+
+    # Tool: DeleteComponent
+    # Description: Deletes a component from the target system
     def delete_component(component_type: str, name: str) -> str:
         """
             Deletes a component from the target system.
@@ -254,31 +234,29 @@ def create_meta_system():
         """
         try:
             if component_type.lower() not in ["node", "tool", "router"]:
-                return f"!!Error: Invalid component type '{component_type}'. Must be 'node', 'tool', or 'router'."
-                
-            if component_type.lower() == "node":
-                result = target_system.delete_node(name)
-                return f"Node '{name}' deleted successfully" if result else f"Failed to delete node '{name}'"
-                
-            elif component_type.lower() == "tool":
-                result = target_system.delete_tool(name)
-                return f"Tool '{name}' deleted successfully" if result else f"Failed to delete tool '{name}'"
-                    
-                
-            elif component_type.lower() == "router":
-                result = target_system.delete_conditional_edge(name)
-                return f"Router for node '{name}' deleted successfully" if result else f"No router found for node '{name}'"
-                
-        except Exception as e:
-            return f"!!Error deleting {component_type}: {repr(e)}"
+                return f"Error: Invalid component type '{component_type}'. Must be 'node', 'tool', or 'router'."
     
-    meta_system.create_tool(
-        "DeleteComponent",
-        "Deletes a component from the target system",
-        delete_component
-    )
+            if component_type.lower() == "node":
+                result = target_agentic_system.delete_node(name)
+                return f"Node '{name}' deleted successfully" if result else f"Failed to delete node '{name}'"
+    
+            elif component_type.lower() == "tool":
+                result = target_agentic_system.delete_tool(name)
+                return f"Tool '{name}' deleted successfully" if result else f"Failed to delete tool '{name}'"
+    
+    
+            elif component_type.lower() == "router":
+                result = target_agentic_system.delete_conditional_edge(name)
+                return f"Router for node '{name}' deleted successfully" if result else f"No router found for node '{name}'"
+    
+        except Exception as e:
+            return f"Error deleting {component_type}: {repr(e)}"
+    
 
-    # AddEdge tool
+    tools["DeleteComponent"] = tool(runnable=delete_component, name_or_callable="DeleteComponent")
+
+    # Tool: AddEdge
+    # Description: Adds an edge between nodes in the target system
     def add_edge(source: str, target: str) -> str:
         """
             Adds an edge between nodes in the target system.
@@ -286,18 +264,16 @@ def create_meta_system():
                 target: Name of the target node
         """
         try:
-            target_system.create_edge(source, target)
+            target_agentic_system.create_edge(source, target)
             return f"Edge from '{source}' to '{target}' added successfully"
         except Exception as e:
-            return f"!!Error adding edge: {repr(e)}"
+            return f"Error adding edge: {repr(e)}"
     
-    meta_system.create_tool(
-        "AddEdge",
-        "Adds an edge between nodes in the target system",
-        add_edge
-    )
 
-    # SystemPrompt tool
+    tools["AddEdge"] = tool(runnable=add_edge, name_or_callable="AddEdge")
+
+    # Tool: SystemPrompt
+    # Description: Adds or updates system prompts
     def system_prompt(system_prompt_code: str) -> str:
         """
             Adds a system prompt to the system_prompts file. Can be either a constant or a function that returns the system prompt.
@@ -305,61 +281,54 @@ def create_meta_system():
                 system_prompt: A system prompt that can be used to invoke large language models.
         """
         try:
-            target_system.add_system_prompt(system_prompt_code)
+            target_agentic_system.add_system_prompt(system_prompt_code)
             return f"System prompts file updated successfully"
         except Exception as e:
-            return f"!!Error updating system prompts file: {repr(e)}"
+            return f"Error updating system prompts file: {repr(e)}"
     
-    meta_system.create_tool(
-        "SystemPrompt",
-        "Adds or updates system prompts",
-        system_prompt
-    )
 
-    # TestSystem tool
-    def test_system() -> str:
+    tools["SystemPrompt"] = tool(runnable=system_prompt, name_or_callable="SystemPrompt")
+
+    # Tool: TestSystem
+    # Description: Tests the target system with a given state
+    def test_system(state: Dict[str, Any]) -> str:
         """
             Executes the current system with a simple test input state to validate functionality.
         """
         all_outputs = []
         error_message = ""
         stdout_capture = io.StringIO()
-        test_state = {"messages": [HumanMessage("\n".join([
-            'Design a very simple system that receives a list of integers and computes their sum.',
-            'Test the system with a state like this: {"messages": [], "list_of_integers": [9, 7, 5]}.',
-            'The final state of the system should include "solution": 21.',
-            "Therefore, the system's state must contain the attributes: 'list_of_integers': List[int] and 'solution': int."
-        ]))]}
-        
+    
         try:
-            source_code, _ = materialize_system(target_system, output_dir=None)
+            source_code, _ = materialize_system(target_agentic_system, output_dir=None)
             namespace = {}
-            
+    
             # Capture stdout during execution
             with contextlib.redirect_stdout(stdout_capture):
                 exec(source_code, namespace, namespace)
-
+    
                 if 'build_system' not in namespace:
                     raise Exception("Could not find build_system function in generated code")
-
+    
                 target_workflow, _ = namespace['build_system']()
                 pbar = tqdm(desc="Testing the System")
-
-                for output in target_workflow.stream(test_state, config={"recursion_limit": 20}):
+    
+                for output in target_workflow.stream(state, config={"recursion_limit": 20}):
                     output["messages"] = clean_messages(output)
                     all_outputs.append(output)
                     pbar.update(1)
-            
+    
             pbar.close()
-
+    
         except Exception as e:
-            error_message = f"\n\n !!Error while testing the system:\n{repr(e)}"
-
+            location = "Iteration " + str(len(all_outputs))
+            error_message = f"\n\n Error while testing the system {location}:\n{repr(e)}"
+    
         # Always capture stdout after try block
         captured_output = stdout_capture.getvalue()
-        
+    
         result = "\n".join([f"State {i}: " + str(out) for i, out in enumerate(all_outputs)]) if all_outputs else {}
-        
+    
         # Add captured stdout to the result
         test_result = f"Test completed.\n <SystemStates>\n{result}\n</SystemStates>"
         std_out = ""
@@ -367,17 +336,15 @@ def create_meta_system():
             std_out = f"\n\n<Stdout>\n{captured_output}\n</Stdout>"
             test_result += std_out
         if error_message:
-            return error_message + std_out
+            raise Exception(error_message + std_out)
         else:
             return test_result
     
-    meta_system.create_tool(
-        "TestSystem",
-        "Tests the target system with a given state",
-        test_system
-    )
 
-    # DeleteEdge tool
+    tools["TestSystem"] = tool(runnable=test_system, name_or_callable="TestSystem")
+
+    # Tool: DeleteEdge
+    # Description: Deletes an edge between nodes in the target system
     def delete_edge(source: str, target: str) -> str:
         """
             Deletes an edge between nodes.
@@ -385,81 +352,75 @@ def create_meta_system():
                 target: Name of the target node
         """
         try:
-            result = target_system.delete_edge(source, target)
+            result = target_agentic_system.delete_edge(source, target)
             return f"Edge from '{source}' to '{target}' deleted successfully" if result else f"No such edge from '{source}' to '{target}'"
         except Exception as e:
-            return f"!!Error deleting edge: {repr(e)}"
+            return f"Error deleting edge: {repr(e)}"
     
-    meta_system.create_tool(
-        "DeleteEdge",
-        "Deletes an edge between nodes in the target system",
-        delete_edge
-    )
 
-    # EndDesign tool
+    tools["DeleteEdge"] = tool(runnable=delete_edge, name_or_callable="DeleteEdge")
+
+    # Tool: EndDesign
+    # Description: Finalizes the system design process
     def end_design() -> str:
         """
             Finalizes the system design process.
         """
         try:  
             code_dir = "sandbox/workspace/automated_systems"
-            materialize_system(target_system, output_dir=code_dir)
+            materialize_system(target_agentic_system, output_dir=code_dir)
             print(f"System code materialized to {code_dir}")
     
-            pickle_name = target_system.system_name.replace("/", "_").replace("\\", "_").replace(":", "_") + ".pkl"
+            pickle_name = target_agentic_system.system_name.replace("/", "_").replace("\\", "_").replace(":", "_") + ".pkl"
             pickle_path = os.path.join(code_dir, pickle_name)
             with open(pickle_path, 'wb') as f:
-                pickle.dump(target_system, f)
+                pickle.dump(target_agentic_system, f)
             print(f"System pickled to {pickle_path}")
     
             return "Ending the design process..."
         except Exception as e:
-            error_msg = f"!!Error finalizing system: {repr(e)}"
+            error_msg = f"Error finalizing system: {repr(e)}"
             print(error_msg)
             return error_msg
     
-    meta_system.create_tool(
-        "EndDesign",
-        "Finalizes the system design process",
-        end_design
-    )
 
-    # Create node functions
-    
-    # MetaThinker node
+    tools["EndDesign"] = tool(runnable=end_design, name_or_callable="EndDesign")
+
+    # Register tools with LargeLanguageModel class
+    LargeLanguageModel.register_available_tools(tools)
+
+    # ===== Node Definitions =====
+    # Node: MetaThinker
+    # Description: Meta Thinker
     def meta_thinker_function(state: Dict[str, Any]) -> Dict[str, Any]:  
         llm = LargeLanguageModel(temperature=0.8, wrapper="google", model_name="gemini-2.0-flash")
         messages = state.get("messages", [])
-
-        code, prompt_code = materialize_system(target_system, output_dir=None)
+    
+        code, prompt_code = materialize_system(target_agentic_system, output_dir=None)
         code_message = "---Current Code:\n" + code
         code_message += ("\n---System Prompts File:\n" + prompt_code) if prompt_code else ""
     
         full_messages = [SystemMessage(content=meta_thinker)] + messages + [HumanMessage(content=code_message)]
         print("Thinking...")
         response = llm.invoke(full_messages)
-
+    
         transition_message = HumanMessage(content= "\n".join([
             "Thank you for the detailed plan. Please implement this system design step by step.",
             "Start by setting up the state attributes, imports and installing the necessary packages."
             ]))
         updated_messages = messages + [response, transition_message] 
-
+    
         new_state = {"messages": updated_messages}
         return new_state
     
-    meta_system.create_node(
-        "MetaThinker", 
-        "Meta Thinker",
-        meta_thinker_function
-    )
 
-    tools = {}
-    # MetaAgent node
+    graph.add_node("MetaThinker", meta_thinker_function)
+
+    # Node: MetaAgent
+    # Description: Meta Agent
     def meta_agent_function(state: Dict[str, Any]) -> Dict[str, Any]:  
         llm = LargeLanguageModel(temperature=0.2, wrapper="google", model_name="gemini-2.0-flash")
-        llm.bind_tools(list(tools.values()), function_call_type="decorator")
-
+    
         context_length = 8*2 # even
         messages = state.get("messages", [])
         iteration = len([msg for msg in messages if isinstance(msg, AIMessage)])
@@ -474,26 +435,28 @@ def create_meta_system():
             )
         except Exception as e:
             print(f"Error during message trimming: {e}")
-
-        code, prompt_code = materialize_system(target_system, output_dir=None)
+    
+        code, prompt_code = materialize_system(target_agentic_system, output_dir=None)
         code_message = "---(Iteration {iteration}) Current Code:\n" + code
         code_message += ("\n---System Prompts File:\n" + prompt_code) if prompt_code else ""
     
         full_messages = [SystemMessage(content=meta_agent)] + initial_messages + trimmed_messages + [HumanMessage(content=code_message)]
+        print([getattr(last_msg, 'type', 'Unknown') for last_msg in full_messages])
         response = llm.invoke(full_messages)
-
+    
         if not hasattr(response, 'content') or not response.content:
             response.content = "I will call the necessary tools."
-        
-        human_message, tool_results = llm.execute_tool_calls(response.content, function_call_type="decorator")
-
+    
+        decorator_tool_calls = parse_decorator_tool_calls(response.content)
+        human_message, tool_results = execute_decorator_tool_calls(decorator_tool_calls)
+    
         updated_messages = messages + [response]
         if human_message:
             updated_messages.append(human_message)
         else:
             updated_messages.append(HumanMessage(content="You made no valid function calls. Remember to use the @@decorator_name() syntax."))
-
-            
+    
+    
         # Ending the design if the last test ran without errors (this does not check accuracy)
         design_completed = False
         if tool_results and 'EndDesign' in tool_results and "Ending the design process" in str(tool_results['EndDesign']):
@@ -507,8 +470,8 @@ def create_meta_system():
                     elif "Error while testing the system" in msg.content:
                         test_passed_recently = False
                         break
-
-            if test_passed_recently or iteration >= 118:
+    
+            if test_passed_recently or iteration >= 58:
                 design_completed = True
             else:
                 if human_message and "Ending the design process..." in human_message.content:
@@ -520,46 +483,35 @@ def create_meta_system():
         new_state = {"messages": updated_messages, "design_completed": design_completed}
         return new_state
     
-    meta_system.create_node(
-        "MetaAgent", 
-        "Meta Agent",
-        meta_agent_function
-    )
 
-    # EndDesign node
+    graph.add_node("MetaAgent", meta_agent_function)
+
+    # Node: EndDesign
+    # Description: Terminal node for workflow completion
     def end_design_node(state: Dict[str, Any]) -> Dict[str, Any]:
         return state
     
-    meta_system.create_node(
-        "EndDesign", 
-        "Terminal node for workflow completion",
-        end_design_node
-    )
 
-    # Create edges
-    meta_system.create_edge("MetaThinker", "MetaAgent")
-    
-    # Add conditional edge
+    graph.add_node("EndDesign", end_design_node)
+
+    # ===== Standard Edges =====
+    graph.add_edge("MetaThinker", "MetaAgent")
+
+    graph.add_edge("__start__", "MetaThinker")
+
+    graph.add_edge("EndDesign", "__end__")
+
+    # ===== Conditional Edges =====
+    # Conditional Router from: MetaAgent
     def design_completed_router(state: Dict[str, Any]) -> str:
         """Routes to EndDesign if design is completed, otherwise back to MetaAgent."""
         if state.get("design_completed", False):
             return "EndDesign"
         return "MetaAgent"
     
-    meta_system.create_conditional_edge(
-        source="MetaAgent", 
-        condition=design_completed_router,
-        condition_code=inspect.getsource(design_completed_router),
-        path_map={'MetaAgent': 'MetaAgent', 'EndDesign': 'EndDesign'}
-    )
-    
-    # Set entry and exit points
-    meta_system.create_edge(START, "MetaThinker")
-    meta_system.create_edge("EndDesign", END)
-    
-    # Materialize the system
-    materialize_system(meta_system)
-    print("----- Materialized Meta System -----")
 
-if __name__ == "__main__":
-    create_meta_system()
+    graph.add_conditional_edges("MetaAgent", design_completed_router, {'MetaAgent': 'MetaAgent', 'EndDesign': 'EndDesign'})
+
+    # ===== Compilation =====
+    workflow = graph.compile()
+    return workflow, tools

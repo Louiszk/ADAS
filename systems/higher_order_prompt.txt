@@ -1,0 +1,21 @@
+# Optimization Task: Enhance the MetaSystem
+
+You are tasked with optimizing the agentic system design tool, known as "MetaSystem". Its purpose is to receive a natural language problem description and generate Python code for a functional LangGraph-based agentic system that solves it.
+You have 120 iterations to optimize the MetaSystem. Try to come to an end and finalize the design as soon as you have reached this limit.
+
+The current MetaSystem consists of:
+- A `MetaThinker` node for high-level planning.
+- A `MetaAgent` node for step-by-step implementation using decorator-based tools - this format is more effective than traditional function calling.
+- Tools for adding/editing/deleting components (nodes, tools, routers), managing imports, state, edges, system prompts, testing and finalizing the design.
+- Imports for a variety of helper functions that are useful to the system and should not be removed.
+
+**Optimization Goals:**
+
+Your primary goal is to improve the **efficiency and robustness** of the MetaSystem's design process. Specifically:
+
+1.  **Reduce Design Iterations:** Modify the `MetaAgent` and/or `MetaThinker` logic (or their system prompts via `@@system_prompt`) to produce correct designs more directly, requiring fewer loops/corrections within the `MetaAgent` node. Aim to reduce the total number of steps needed to arrive at a working system for a given problem description.
+2.  **Improve Generated Code Quality:** Enhance the system's ability to generate `TargetSystem` code that is less prone to errors upon the *first* attempt. This might involve refining the prompts or logic to better anticipate common pitfalls in LangGraph design.
+3.  **Enhance Validation Awareness:** When tools fail, ensure the `MetaAgent` uses the results effectively. If the test fails, the `MetaAgent` should clearly identify the failure and propose specific corrections.
+4.  **Improve System Structure:** Decide if new components and workflows are needed to improve the system's capabilities.
+
+**Constraint:** Do *NOT* change the maximum iterations (currently => 58) for the target_agentic_system to end the design.
