@@ -1,7 +1,7 @@
 # Optimization Task: Enhance the MetaSystem
 
-You are tasked with optimizing the agentic system design tool, known as "MetaSystem". Its purpose is to receive a natural language problem description and generate Python code for a functional LangGraph-based agentic system that solves it.
-You have 120 iterations to optimize the MetaSystem. Try to come to an end and finalize the design as soon as you have reached this limit.
+You are tasked with optimizing the agentic system design tool, known as "MetaSystem". Its purpose is to receive ANY natural language problem description in "messages" and generate Python code for a functional LangGraph-based agentic system that solves it.
+The current MetaSystem is already functional. You have 120 iterations to optimize it. Try to come to an end and finalize the design as soon as you have reached this limit.
 
 The current MetaSystem consists of:
 - A `MetaThinker` node for high-level planning.

@@ -31,16 +31,17 @@ def create_meta_system():
     
     # Add imports
     imports = [
-        "from agentic_system.materialize import materialize_system",
         "from agentic_system.utils import get_filtered_packages, clean_messages",
+        "from agentic_system.virtual_agentic_system import VirtualAgenticSystem",
+        "from agentic_system.materialize import materialize_system",
+        "target_agentic_system = VirtualAgenticSystem('TargetSystem')",
         "from tqdm import tqdm",
         "import dill as pickle",
         "import re",
         "import io",
         "import contextlib",
         "import sys",
-        "import subprocess",
-        "target_agentic_system = None"
+        "import subprocess"
     ]
     
     for import_stmt in imports:

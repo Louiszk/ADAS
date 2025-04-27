@@ -31,7 +31,7 @@ A node is simply a Python function that processes state. There are two common pa
 ```python
 # Example
 def agent_node(state):
-    llm = LargeLanguageModel(temperature=0.4) # Use this default model (wrapper around ChatOpenAI)
+    llm = LargeLanguageModel(temperature=0.4, wrapper="google", model_name="gemini-2.0-flash") # only use this model!
     system_prompt = SYSTEM_PROMPT_AGENT1 # constant added to System Prompts section.
     # Optionally bind tools that this agent can use
     # This will automatically instruct the agent based on the tools docstrings
@@ -45,7 +45,7 @@ def agent_node(state):
     response = llm.invoke(full_messages)
 
     # Execute the tool calls from the agent's response
-    tool_messages, tool_results = llm.execute_tool_calls(response)
+    tool_messages, tool_results = llm.execute_tool_calls(response.content, function_calling_type="decorator")
     
     # You can now use tool_results programmatically if needed
     # e.g., tool_results["Tool1"] contains the actual return values of Tool1
@@ -167,6 +167,7 @@ instead always enclose them in triple backticks, or a Python markdown block to e
 @@function_name(arg1 = "value1", arg2 = "value2")
 ```
 
+Write each decorator in a separate block. If there are more than one decorators in a single block, the block will not be executed.
 For example:
 ```
 @@pip_install(package_name = "numpy")
@@ -216,6 +217,8 @@ This will add a conditional edge from SourceNode to NodeA or NodeB based on some
 Use START and END as special node names for setting entry and exit points:
 ```
 @@add_edge(source = START, target = "FirstNode")  # Sets FirstNode as the entry point
+```
+```
 @@add_edge(source = "LastNode", target = END)     # Sets LastNode as the finish point
 ```
 """

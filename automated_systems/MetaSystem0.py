@@ -12,8 +12,10 @@ from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, Tool
 from langgraph.graph import StateGraph, START, END
 from langchain_core.tools import tool
 import os
-from agentic_system.materialize import materialize_system
 from agentic_system.utils import get_filtered_packages, clean_messages
+from agentic_system.virtual_agentic_system import VirtualAgenticSystem
+from agentic_system.materialize import materialize_system
+target_agentic_system = VirtualAgenticSystem('TargetSystem')
 from tqdm import tqdm
 import dill as pickle
 import re
@@ -21,7 +23,6 @@ import io
 import contextlib
 import sys
 import subprocess
-target_agentic_system = None
 from automated_systems.MetaSystem0_system_prompts import *
 
 # ===== Agentic System =====

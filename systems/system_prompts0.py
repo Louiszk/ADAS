@@ -168,6 +168,7 @@ instead always enclose them in triple backticks, or a Python markdown block to e
 @@function_name(arg1 = "value1", arg2 = "value2")
 ```
 
+Write each decorator in a separate block. If there are more than one decorators in a single block, the block will not be executed.
 For example:
 ```
 @@pip_install(package_name = "numpy")
@@ -217,6 +218,8 @@ This will add a conditional edge from SourceNode to NodeA or NodeB based on some
 Use START and END as special node names for setting entry and exit points:
 ```
 @@add_edge(source = START, target = "FirstNode")  # Sets FirstNode as the entry point
+```
+```
 @@add_edge(source = "LastNode", target = END)     # Sets LastNode as the finish point
 ```
 """

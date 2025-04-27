@@ -56,7 +56,7 @@ def create_meta_system():
         """
 
         exclude_packages = [
-            "datasets", "docker", "grpcio-status", "langchain-google-genai", "langchain-openai", "wheel",
+            "datasets", "docker", "grpcio-status", "langchain-openai", "wheel",
             "llm-sandbox", "pip", "dill", "podman", "python-dotenv", "setuptools"
             ]
         # Validate package name to prevent command injection
@@ -64,7 +64,7 @@ def create_meta_system():
     
         if not re.match(valid_pattern, package_name):
             return f"!!Error: Invalid package name format. Package name '{package_name}' contains invalid characters."
-        if any((ep in package_name for ep in exclude_packages + ["langgraph", "langchain-core"])):
+        if any((ep in package_name for ep in exclude_packages + ["langgraph", "langchain-google-genai", "langchain-core"])):
             return f"{package_name} is already installed."
     
         try:
@@ -99,19 +99,25 @@ def create_meta_system():
         """
     
         try:
-            # Basic validation for each statement
-            for stmt in import_statements:
-                if not isinstance(stmt, str) or not (stmt.startswith("import ") or stmt.startswith("from ")):
-                    return f"!!Error: Invalid import statement format: '{stmt}'. Must start with 'import' or 'from'."
-    
             # Always keep the mandatory base imports
             base_imports = [
                 "from agentic_system.large_language_model import LargeLanguageModel",
                 "from typing import Dict, List, Any, Callable, Optional, Union, TypeVar, Generic, Tuple, Set, TypedDict",
-                "from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage",
+                "from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage, trim_messages",
                 "from langgraph.graph import StateGraph, START, END",
                 "from langchain_core.tools import tool",
-                "import os"
+                "from agentic_system.utils import get_filtered_packages, clean_messages",
+                "from agentic_system.virtual_agentic_system import VirtualAgenticSystem",
+                "from agentic_system.materialize import materialize_system",
+                "target_agentic_system = VirtualAgenticSystem('TargetSystem')",
+                "from tqdm import tqdm",
+                "import dill as pickle",
+                "import os",
+                "import re",
+                "import io",
+                "import contextlib",
+                "import sys",
+                "import subprocess"
             ]
             # Use a set to avoid duplicates and preserve order for non-base imports
             final_imports = base_imports + sorted(list(set(stmt.strip() for stmt in import_statements if stmt.strip() not in base_imports)))
@@ -321,7 +327,7 @@ def create_meta_system():
         """
             Executes the current system with a simple test input state to validate functionality.
         """
-        all_outputs = []
+        final_state = {}
         error_message = ""
         stdout_capture = io.StringIO()
         test_state = {"messages": [HumanMessage("\n".join([
@@ -347,7 +353,7 @@ def create_meta_system():
 
                 for output in target_workflow.stream(test_state, config={"recursion_limit": 20}):
                     output["messages"] = clean_messages(output)
-                    all_outputs.append(output)
+                    final_state = output
                     pbar.update(1)
             
             pbar.close()
@@ -358,7 +364,7 @@ def create_meta_system():
         # Always capture stdout after try block
         captured_output = stdout_capture.getvalue()
         
-        result = "\n".join([f"State {i}: " + str(out) for i, out in enumerate(all_outputs)]) if all_outputs else {}
+        result = "Final State: " + str(final_state)
         
         # Add captured stdout to the result
         test_result = f"Test completed.\n <SystemStates>\n{result}\n</SystemStates>"

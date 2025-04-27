@@ -41,11 +41,29 @@ def parse_decorator_tool_calls(text):
     if not code_blocks:
         print("No code blocks found!")
     
-    for block in code_blocks:
-        lines = block.split('\n')
+    for block_content in code_blocks:
+        lines = block_content.split('\n')
+        occurrences = sum([1 if line.strip().startswith('@@') else 0 for line in lines])
+        
+        # First check if we should process this block at all
+        first_decorator = None
+        for line in lines:
+            if line.strip().startswith('@@'):
+                call_match = re.match(r'@@([a-zA-Z_][a-zA-Z0-9_]*)', line.strip())
+                if call_match:
+                    first_decorator = call_match.group(1)
+                    break
+        
+        # Skip blocks with multiple @@ that aren't system_prompt
+        if occurrences > 1 and first_decorator != 'system_prompt':
+            print(f"Skipping block with multiple decorators (found {occurrences})")
+            continue
+        
+        # Process just the first decorator in the block
+        processed_decorator = False
         i = 0
         
-        while i < len(lines):
+        while i < len(lines) and not processed_decorator:
             line = lines[i].strip()
             
             if line.startswith('@@'):
@@ -65,28 +83,21 @@ def parse_decorator_tool_calls(text):
                         tool_name = camelfy(decorator_name)
                         
                         if decorator_name in code_related_tools:
+                            # For code-related decorators, include the entire block after the decorator
                             code_start = end_line_idx + 1
                             code_end = len(lines)
-                            
-                            # Find the next decorator
-                            for k in range(code_start, len(lines)):
-                                if lines[k].strip().startswith('@@'):
-                                    code_end = k
-                                    break
                             
                             content = '\n'.join(lines[code_start:code_end])
                             
                             param_name = code_related_tools[decorator_name]
                             args[param_name] = content
-                            
-                            i = code_end - 1
-                        else:
-                            i = end_line_idx
                         
                         tool_calls.append({
                             'name': tool_name,
                             'args': args
                         })
+                        
+                        processed_decorator = True
             
             i += 1
     
