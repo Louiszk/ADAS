@@ -34,8 +34,7 @@ def agent_node(state):
     llm = LargeLanguageModel(temperature=0.4, wrapper="google", model_name="gemini-2.0-flash") # only use this model!
     system_prompt = SYSTEM_PROMPT_AGENT1 # constant added to System Prompts section.
     # Optionally bind tools that this agent can use
-    # This will automatically instruct the agent based on the tools docstrings
-    llm.bind_tools([tools["Tool1"], tools["Tool2"]])
+    llm.bind_tools([tools["Tool1"], tools["Tool2"]], function_call_type="decorator")
     
     # get message history, or other crucial information
     messages = state.get("messages", [])
@@ -45,7 +44,7 @@ def agent_node(state):
     response = llm.invoke(full_messages)
 
     # Execute the tool calls from the agent's response
-    tool_messages, tool_results = llm.execute_tool_calls(response.content, function_calling_type="decorator")
+    tool_messages, tool_results = llm.execute_tool_calls(response.content, function_call_type="decorator")
     
     # You can now use tool_results programmatically if needed
     # e.g., tool_results["Tool1"] contains the actual return values of Tool1

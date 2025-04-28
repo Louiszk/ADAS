@@ -11,7 +11,7 @@ import contextlib
 from langgraph.graph import START, END
 from typing import Dict, List, Any, Optional, Union
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, AIMessage, trim_messages
-from agentic_system.large_language_model import LargeLanguageModel, parse_decorator_tool_calls, execute_decorator_tool_calls
+from agentic_system.large_language_model import LargeLanguageModel
 from agentic_system.virtual_agentic_system import VirtualAgenticSystem
 from agentic_system.materialize import materialize_system
 from agentic_system.utils import get_filtered_packages, clean_messages
@@ -64,7 +64,7 @@ def create_meta_system():
         valid_pattern = r'^[a-zA-Z0-9._-]+(\s*[=<>!]=\s*[0-9a-zA-Z.]+)?$'
     
         if not re.match(valid_pattern, package_name):
-            return f"Error: Invalid package name format. Package name '{package_name}' contains invalid characters."
+            return f"!!Error: Invalid package name format. Package name '{package_name}' contains invalid characters."
         if any((ep in package_name for ep in exclude_packages + ["langgraph", "langchain-core"])):
             return f"{package_name} is already installed."
     
@@ -81,10 +81,10 @@ def create_meta_system():
                 target_agentic_system.packages = get_filtered_packages(exclude_packages) + ["langchain-core 0.3.45"]
                 return f"Successfully installed {package_name}"
             else:
-                return f"Error installing {package_name}:\n{process.stdout}"
+                return f"!!Error installing {package_name}:\n{process.stdout}"
     
         except Exception as e:
-            return f"Installation failed: {str(e)}"
+            return f"!!Error installing {package_name}: {str(e)}"
     
     meta_system.create_tool(
         "PipInstall",
@@ -103,11 +103,11 @@ def create_meta_system():
             # Basic validation for each statement
             for stmt in import_statements:
                 if not isinstance(stmt, str) or not (stmt.startswith("import ") or stmt.startswith("from ")):
-                    return f"Error: Invalid import statement format: '{stmt}'. Must start with 'import' or 'from'."
+                    return f"!!Error: Invalid import statement format: '{stmt}'. Must start with 'import' or 'from'."
     
             # Always keep the mandatory base imports
             base_imports = [
-                "from agentic_system.large_language_model import LargeLanguageModel, parse_decorator_tool_calls, execute_decorator_tool_calls",
+                "from agentic_system.large_language_model import LargeLanguageModel",
                 "from typing import Dict, List, Any, Callable, Optional, Union, TypeVar, Generic, Tuple, Set, TypedDict",
                 "from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage",
                 "from langgraph.graph import StateGraph, START, END",
@@ -120,7 +120,7 @@ def create_meta_system():
             target_agentic_system.imports = final_imports
             return f"Import statements set successfully for target system. Total imports: {len(target_agentic_system.imports)}."
         except Exception as e:
-            return f"Error setting imports: {repr(e)}"
+            return f"!!Error setting imports: {repr(e)}"
     
     meta_system.create_tool(
         "SetImports",
@@ -139,7 +139,7 @@ def create_meta_system():
             target_agentic_system.set_state_attributes(attributes)
             return f"State attributes set successfully: {attributes}"
         except Exception as e:
-            return f"Error setting state attributes: {repr(e)}"
+            return f"!!Error setting state attributes: {repr(e)}"
     
     meta_system.create_tool(
         "SetStateAttributes",
@@ -158,14 +158,14 @@ def create_meta_system():
         """
         try:
             if component_type.lower() not in ["node", "tool", "router"]:
-                return f"Error: Invalid component type '{component_type}'. Must be 'node', 'tool', or 'router'."
+                return f"!!Error: Invalid component type '{component_type}'. Must be 'node', 'tool', or 'router'."
             
             if not function_code:
-                return f"Error: function_code is required for all component types"
+                return f"!!Error: function_code is required for all component types"
                 
             # Get the function implementation from the code
             func = target_agentic_system.get_function(function_code)
-            if isinstance(func, str) and func.startswith("Error"):
+            if isinstance(func, str) and func.startswith("!!Error"):
                 return func  # Return the error
                 
             if component_type.lower() == "node":
@@ -186,7 +186,7 @@ def create_meta_system():
                 return f"Conditional edge from '{name}' added successfully"
                 
         except Exception as e:
-            return f"Error creating {component_type}: {repr(e)}"
+            return f"!!Error creating {component_type}: {repr(e)}"
     
     meta_system.create_tool(
         "AddComponent",
@@ -205,7 +205,7 @@ def create_meta_system():
         """
         try:
             if component_type.lower() not in ["node", "tool", "router"]:
-                return f"Error: Invalid component type '{component_type}'. Must be 'node', 'tool', or 'router'."
+                return f"!!Error: Invalid component type '{component_type}'. Must be 'node', 'tool', or 'router'."
                 
             new_function = target_agentic_system.get_function(new_function_code)
             if isinstance(new_function, str) and new_function.startswith("Error"):
@@ -213,21 +213,21 @@ def create_meta_system():
                 
             if component_type.lower() == "node":
                 if name not in target_agentic_system.nodes:
-                    return f"Error: Node '{name}' not found"
+                    return f"!!Error: Node '{name}' not found"
                 
                 target_agentic_system.create_node(name, new_description, new_function, new_function_code)
                 return f"Node '{name}' updated successfully"
                 
             elif component_type.lower() == "tool":
                 if name not in target_agentic_system.tools:
-                    return f"Error: Tool '{name}' not found"
+                    return f"!!Error: Tool '{name}' not found"
                 
                 target_agentic_system.create_tool(name, new_description, new_function, new_function_code)
                 return f"Tool '{name}' updated successfully"
                 
             elif component_type.lower() == "router":
                 if name not in target_agentic_system.conditional_edges:
-                    return f"Error: Router for node '{name}' not found"
+                    return f"!!Error: Router for node '{name}' not found"
                     
                 target_agentic_system.create_conditional_edge(
                     source=name,
@@ -238,7 +238,7 @@ def create_meta_system():
                 return f"Router for node '{name}' updated successfully"
                 
         except Exception as e:
-            return f"Error editing {component_type}: {repr(e)}"
+            return f"!!Error editing {component_type}: {repr(e)}"
     
     meta_system.create_tool(
         "EditComponent",
@@ -255,7 +255,7 @@ def create_meta_system():
         """
         try:
             if component_type.lower() not in ["node", "tool", "router"]:
-                return f"Error: Invalid component type '{component_type}'. Must be 'node', 'tool', or 'router'."
+                return f"!!Error: Invalid component type '{component_type}'. Must be 'node', 'tool', or 'router'."
                 
             if component_type.lower() == "node":
                 result = target_agentic_system.delete_node(name)
@@ -271,7 +271,7 @@ def create_meta_system():
                 return f"Router for node '{name}' deleted successfully" if result else f"No router found for node '{name}'"
                 
         except Exception as e:
-            return f"Error deleting {component_type}: {repr(e)}"
+            return f"!!Error deleting {component_type}: {repr(e)}"
     
     meta_system.create_tool(
         "DeleteComponent",
@@ -290,7 +290,7 @@ def create_meta_system():
             target_agentic_system.create_edge(source, target)
             return f"Edge from '{source}' to '{target}' added successfully"
         except Exception as e:
-            return f"Error adding edge: {repr(e)}"
+            return f"!!Error adding edge: {repr(e)}"
     
     meta_system.create_tool(
         "AddEdge",
@@ -309,7 +309,7 @@ def create_meta_system():
             target_agentic_system.add_system_prompt(system_prompt_code)
             return f"System prompts file updated successfully"
         except Exception as e:
-            return f"Error updating system prompts file: {repr(e)}"
+            return f"!!Error updating system prompts file: {repr(e)}"
     
     meta_system.create_tool(
         "SystemPrompt",
@@ -348,8 +348,7 @@ def create_meta_system():
             pbar.close()
 
         except Exception as e:
-            location = "Iteration " + str(len(all_outputs))
-            error_message = f"\n\n Error while testing the system {location}:\n{repr(e)}"
+            error_message = f"\n\n !!Error while testing the system:\n{repr(e)}"
 
         # Always capture stdout after try block
         captured_output = stdout_capture.getvalue()
@@ -363,7 +362,7 @@ def create_meta_system():
             std_out = f"\n\n<Stdout>\n{captured_output}\n</Stdout>"
             test_result += std_out
         if error_message:
-            raise Exception(error_message + std_out)
+            return error_message + std_out
         else:
             return test_result
     
@@ -384,7 +383,7 @@ def create_meta_system():
             result = target_agentic_system.delete_edge(source, target)
             return f"Edge from '{source}' to '{target}' deleted successfully" if result else f"No such edge from '{source}' to '{target}'"
         except Exception as e:
-            return f"Error deleting edge: {repr(e)}"
+            return f"!!Error deleting edge: {repr(e)}"
     
     meta_system.create_tool(
         "DeleteEdge",
@@ -410,7 +409,7 @@ def create_meta_system():
     
             return "Ending the design process..."
         except Exception as e:
-            error_msg = f"Error finalizing system: {repr(e)}"
+            error_msg = f"!!Error finalizing system: {repr(e)}"
             print(error_msg)
             return error_msg
     
@@ -450,9 +449,11 @@ def create_meta_system():
         meta_thinker_function
     )
 
+    tools = {}
     # MetaAgent node
     def meta_agent_function(state: Dict[str, Any]) -> Dict[str, Any]:  
         llm = LargeLanguageModel(temperature=0.2, wrapper="google", model_name="gemini-2.0-flash")
+        llm.bind_tools(list(tools.values()), function_call_type="decorator")
 
         context_length = 8*2 # even
         messages = state.get("messages", [])
@@ -480,8 +481,7 @@ def create_meta_system():
         if not hasattr(response, 'content') or not response.content:
             response.content = "I will call the necessary tools."
         
-        decorator_tool_calls = parse_decorator_tool_calls(response.content)
-        human_message, tool_results = execute_decorator_tool_calls(decorator_tool_calls)
+        human_message, tool_results = llm.execute_tool_calls(response.content, function_call_type="decorator")
 
         updated_messages = messages + [response]
         if human_message:
