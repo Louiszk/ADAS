@@ -11,7 +11,7 @@ import contextlib
 from langgraph.graph import START, END
 from typing import Dict, List, Any, Optional, Union
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, AIMessage, trim_messages
-from agentic_system.large_language_model import LargeLanguageModel, parse_decorator_tool_calls, execute_decorator_tool_calls
+from agentic_system.large_language_model import LargeLanguageModel
 from agentic_system.virtual_agentic_system import VirtualAgenticSystem
 from agentic_system.materialize import materialize_system
 from agentic_system.utils import get_filtered_packages, clean_messages
@@ -106,7 +106,7 @@ def create_meta_system():
     
             # Always keep the mandatory base imports
             base_imports = [
-                "from agentic_system.large_language_model import LargeLanguageModel, parse_decorator_tool_calls, execute_decorator_tool_calls",
+                "from agentic_system.large_language_model import LargeLanguageModel",
                 "from typing import Dict, List, Any, Callable, Optional, Union, TypeVar, Generic, Tuple, Set, TypedDict",
                 "from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage",
                 "from langgraph.graph import StateGraph, START, END",
@@ -450,9 +450,11 @@ def create_meta_system():
         meta_thinker_function
     )
 
+    tools = {}
     # MetaAgent node
     def meta_agent_function(state: Dict[str, Any]) -> Dict[str, Any]:  
         llm = LargeLanguageModel(temperature=0.2, wrapper="google", model_name="gemini-2.0-flash")
+        llm.bind_tools(list(tools.values()), function_call_type="decorator")
 
         context_length = 8*2 # even
         messages = state.get("messages", [])
@@ -474,14 +476,12 @@ def create_meta_system():
         code_message += ("\n---System Prompts File:\n" + prompt_code) if prompt_code else ""
     
         full_messages = [SystemMessage(content=meta_agent)] + initial_messages + trimmed_messages + [HumanMessage(content=code_message)]
-        print([getattr(last_msg, 'type', 'Unknown') for last_msg in full_messages])
         response = llm.invoke(full_messages)
 
         if not hasattr(response, 'content') or not response.content:
             response.content = "I will call the necessary tools."
         
-        decorator_tool_calls = parse_decorator_tool_calls(response.content)
-        human_message, tool_results = execute_decorator_tool_calls(decorator_tool_calls)
+        human_message, tool_results = llm.execute_tool_calls(response.content, function_call_type="decorator")
 
         updated_messages = messages + [response]
         if human_message:

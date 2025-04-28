@@ -6,7 +6,7 @@
 # langchain-core 0.3.45
 # langgraph 0.3.5
 
-from agentic_system.large_language_model import LargeLanguageModel, parse_decorator_tool_calls, execute_decorator_tool_calls
+from agentic_system.large_language_model import LargeLanguageModel
 from typing import Dict, List, Any, Callable, Optional, Union, TypeVar, Generic, Tuple, Set, TypedDict
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage, trim_messages
 from langgraph.graph import StateGraph, START, END
@@ -94,7 +94,7 @@ def build_system():
     
             # Always keep the mandatory base imports
             base_imports = [
-                "from agentic_system.large_language_model import LargeLanguageModel, parse_decorator_tool_calls, execute_decorator_tool_calls",
+                "from agentic_system.large_language_model import LargeLanguageModel",
                 "from typing import Dict, List, Any, Callable, Optional, Union, TypeVar, Generic, Tuple, Set, TypedDict",
                 "from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage",
                 "from langgraph.graph import StateGraph, START, END",
@@ -387,9 +387,6 @@ def build_system():
 
     tools["EndDesign"] = tool(runnable=end_design, name_or_callable="EndDesign")
 
-    # Register tools with LargeLanguageModel class
-    LargeLanguageModel.register_available_tools(tools)
-
     # ===== Node Definitions =====
     # Node: MetaThinker
     # Description: Meta Thinker
@@ -421,6 +418,7 @@ def build_system():
     # Description: Meta Agent
     def meta_agent_function(state: Dict[str, Any]) -> Dict[str, Any]:  
         llm = LargeLanguageModel(temperature=0.2, wrapper="google", model_name="gemini-2.0-flash")
+        llm.bind_tools(list(tools.values()), function_call_type="decorator")
     
         context_length = 8*2 # even
         messages = state.get("messages", [])
@@ -442,14 +440,12 @@ def build_system():
         code_message += ("\n---System Prompts File:\n" + prompt_code) if prompt_code else ""
     
         full_messages = [SystemMessage(content=meta_agent)] + initial_messages + trimmed_messages + [HumanMessage(content=code_message)]
-        print([getattr(last_msg, 'type', 'Unknown') for last_msg in full_messages])
         response = llm.invoke(full_messages)
     
         if not hasattr(response, 'content') or not response.content:
             response.content = "I will call the necessary tools."
     
-        decorator_tool_calls = parse_decorator_tool_calls(response.content)
-        human_message, tool_results = execute_decorator_tool_calls(decorator_tool_calls)
+        human_message, tool_results = llm.execute_tool_calls(response.content, function_call_type="decorator")
     
         updated_messages = messages + [response]
         if human_message:

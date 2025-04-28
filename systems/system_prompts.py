@@ -35,7 +35,7 @@ def agent_node(state):
     system_prompt = SYSTEM_PROMPT_AGENT1 # constant added to System Prompts section.
     # Optionally bind tools that this agent can use
     # This will automatically instruct the agent based on the tools docstrings
-    llm.bind_tools(["Tool1", "Tool2"])
+    llm.bind_tools([tools["Tool1"], tools["Tool2"]])
     
     # get message history, or other crucial information
     messages = state.get("messages", [])
@@ -44,8 +44,8 @@ def agent_node(state):
     # Invoke the LargeLanguageModel with required information
     response = llm.invoke(full_messages)
 
-    # Execute the tool calls from the agent's response with this designated helper function
-    tool_messages, tool_results = execute_tool_calls(response)
+    # Execute the tool calls from the agent's response
+    tool_messages, tool_results = llm.execute_tool_calls(response)
     
     # You can now use tool_results programmatically if needed
     # e.g., tool_results["Tool1"] contains the actual return values of Tool1

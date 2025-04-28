@@ -115,12 +115,6 @@ def materialize_system(system, output_dir="systems"):
                 f"    tools[\"{tool_name}\"] = tool(runnable={original_name}, name_or_callable=\"{tool_name}\")",
                 ""
             ])
-
-        code_lines.extend([
-            "    # Register tools with LargeLanguageModel class",
-            "    LargeLanguageModel.register_available_tools(tools)",
-            ""
-        ])
     
     # Node definitions
     if system.nodes:

@@ -92,8 +92,9 @@ def parse_decorator_tool_calls(text):
     
     return tool_calls
 
-def execute_decorator_tool_calls(tool_calls):
+def execute_decorator_tool_calls(response, available_tools):
     """Execute decorator-style tool calls found in the text."""
+    tool_calls = parse_decorator_tool_calls(response)
     if not tool_calls:
         return [], {}
         
@@ -104,9 +105,9 @@ def execute_decorator_tool_calls(tool_calls):
         tool_name = tool_call['name']
         tool_args = tool_call['args']
         
-        if tool_name in LargeLanguageModel.available_tools:
+        if tool_name in available_tools:
             try:
-                result = LargeLanguageModel.available_tools[tool_name].invoke(tool_args)
+                result = available_tools[tool_name].invoke(tool_args)
                 
                 tool_messages.append(str(result) if result else f"Tool {tool_name} executed successfully.")
                 tool_results[tool_name] = result
@@ -123,7 +124,7 @@ def execute_decorator_tool_calls(tool_calls):
                 
     return human_message, tool_results
 
-def execute_tool_calls(response):
+def execute_tool_calls(response, available_tools):
     """Execute any tool calls in the llm response."""
     if not hasattr(response, "tool_calls") or not response.tool_calls:
         return [], {}
@@ -135,9 +136,9 @@ def execute_tool_calls(response):
         tool_args = tool_call['args']
         tool_id = tool_call['id']
         
-        if tool_name in LargeLanguageModel.available_tools:
+        if tool_name in available_tools:
             try:
-                result = LargeLanguageModel.available_tools[tool_name].invoke(tool_args)
+                result = available_tools[tool_name].invoke(tool_args)
                 tool_messages.append(ToolMessage(
                     content=str(result) if result else f"Tool {tool_name} executed successfully.",
                     tool_call_id=tool_id,
@@ -213,16 +214,20 @@ def get_model(wrapper, model_name, temperature):
         raise RuntimeError(f"Failed to initialize {wrapper} model: {str(e)}") from e
 
 class LargeLanguageModel:
-    available_tools = {}
 
-    def __init__(self, temperature=0.2, wrapper = "openai", model_name="gpt-4.1-nano"):
+    def __init__(self, temperature=0.2, wrapper="openai", model_name="gpt-4.1-nano"):
         self.model = get_model(wrapper, model_name, temperature)
         self.wrapper = wrapper
+        self.available_tools = {}
 
-    def bind_tools(self, tool_names, parallel_tool_calls=True):
-        if tool_names:
-            tool_objects = [LargeLanguageModel.available_tools[tool_name] for tool_name in tool_names if tool_name in LargeLanguageModel.available_tools]
-            if tool_objects:
+    def bind_tools(self, tools, function_call_type="normal", parallel_tool_calls=True):
+        if tools:
+            tool_objects = [tool for tool in tools if tool.name]
+            if len(tools) > len(tool_objects):
+                raise ValueError("All values in the list must be tool objects")
+            self.available_tools.update({tool.name: tool for tool in tool_objects})
+            
+            if function_call_type == "normal":
                 if self.wrapper=="google":
                     self.model = self.model.bind_tools(tool_objects)
                 else:
@@ -232,6 +237,10 @@ class LargeLanguageModel:
     def invoke(self, input):
         return self.model.invoke(input)
     
-    @classmethod
-    def register_available_tools(cls, tools_dict):
-        cls.available_tools.update(tools_dict)
+    def execute_tool_calls(self, response, function_call_type="normal"):
+        if function_call_type == "normal":
+            return execute_tool_calls(response, self.available_tools)
+        elif function_call_type == "decorator":
+            return execute_decorator_tool_calls(response, self.available_tools)
+        else:
+            raise ValueError(f"function_call_type {function_call_type} is not available")

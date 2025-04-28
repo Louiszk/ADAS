@@ -2,7 +2,7 @@
 from langgraph.graph import StateGraph
 from langchain_core.messages import HumanMessage, SystemMessage
 from typing import List, Any, TypedDict
-from agentic_system.large_language_model import LargeLanguageModel, execute_tool_calls
+from agentic_system.large_language_model import LargeLanguageModel
 from langchain_core.tools import tool
 import requests
 from urllib.parse import quote_plus
@@ -29,7 +29,6 @@ def search_web(query: str) -> str:
 def build_system():
     # Register tool
     tools = {"search_web": search_web}
-    LargeLanguageModel.register_available_tools(tools)
     
     # State definition
     class AgentState(TypedDict):

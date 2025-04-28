@@ -2,7 +2,7 @@
 from langgraph.graph import StateGraph
 from langchain_core.messages import HumanMessage, SystemMessage
 from typing import List, Any, TypedDict
-from agentic_system.large_language_model import LargeLanguageModel, execute_tool_calls
+from agentic_system.large_language_model import LargeLanguageModel
 import re
 import sys
 from io import StringIO
@@ -32,7 +32,6 @@ def execute_python(code: str) -> str:
 def build_system():
     # Register the Python execution tool
     tools = {"execute_python": execute_python}
-    LargeLanguageModel.register_available_tools(tools)
    
     # Define state attributes for the system
     class AgentState(TypedDict):
@@ -46,7 +45,7 @@ def build_system():
     # ===== Node Definitions =====
     def agent_node(state):
         llm = LargeLanguageModel(temperature=0.2)
-        llm.bind_tools(["execute_python"])
+        llm.bind_tools([tools["execute_python"]])
        
         system_prompt = """
             You will solve math problems with Python code.
@@ -60,7 +59,7 @@ def build_system():
         response = llm.invoke(full_messages)
        
         # Execute any tool calls in the response
-        tool_messages, tool_results = execute_tool_calls(response)
+        tool_messages, tool_results = llm.execute_tool_calls(response)
        
         # Use the tool result if available
         if "execute_python" in tool_results:

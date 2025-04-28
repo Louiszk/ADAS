@@ -23,7 +23,7 @@ class VirtualAgenticSystem:
         
         self.packages = ["langchain-core 0.3.45", "langgraph 0.3.5"]
         self.imports = [
-            "from agentic_system.large_language_model import LargeLanguageModel, parse_decorator_tool_calls, execute_decorator_tool_calls",
+            "from agentic_system.large_language_model import LargeLanguageModel",
             "from typing import Dict, List, Any, Callable, Optional, Union, TypeVar, Generic, Tuple, Set, TypedDict",
             "from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage, trim_messages",
             "from langgraph.graph import StateGraph, START, END",
