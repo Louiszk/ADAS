@@ -101,7 +101,12 @@ def execute_decorator_tool_calls(response, available_tools):
     tool_messages = []
     tool_results = {}
     
-    for tool_call in tool_calls:
+    def add_skipped_calls_message(current_index):
+        remaining_calls = len(tool_calls) - current_index - 1
+        if remaining_calls > 0:
+            tool_messages.append(f"Note: {remaining_calls} remaining tool call(s) in this response skipped. You can make new tool calls in your next response.")
+    
+    for i, tool_call in enumerate(tool_calls):
         tool_name = tool_call['name']
         tool_args = tool_call['args']
         
@@ -111,13 +116,20 @@ def execute_decorator_tool_calls(response, available_tools):
                 
                 tool_messages.append(str(result) if result else f"Tool {tool_name} executed successfully.")
                 tool_results[tool_name] = result
+                
+                if isinstance(result, str) and "!!Error" in result:
+                    add_skipped_calls_message(i)
+                    break
             except Exception as e:
-                error_message = f"Error executing tool {tool_name}: {repr(e)}."
+                error_message = f"Error executing tool {tool_name}: {repr(e)}"
                 tool_messages.append(error_message)
                 tool_results[tool_name] = error_message
+                
+                add_skipped_calls_message(i)
                 break
         else:
             tool_messages.append(f"Tool {tool_name} not found")
+            add_skipped_calls_message(i)
             break
 
     human_message = HumanMessage(content = "\n\n".join(tool_messages)) if tool_messages else None

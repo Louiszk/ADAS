@@ -169,7 +169,7 @@ class VirtualAgenticSystem:
     def get_function(self, function_code):
         match = re.search(r'def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(', function_code)
         if not match:
-            return "Error: Could not identify function name in the provided code"
+            return "!!Error: Could not identify function name in the provided code"
         
         function_name = match.group(1)
         completed_function_code = "\n".join(self.imports) + "\n" + function_code    
@@ -180,7 +180,7 @@ class VirtualAgenticSystem:
             new_function = local_vars[function_name]
             return new_function
         else:
-            return f"Error: Function '{function_name}' not found after execution"
+            return f"!!Error: Function '{function_name}' not found after execution"
 
     def add_system_prompt(self, new_code: str) -> bool:
         """

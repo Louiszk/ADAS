@@ -237,6 +237,7 @@ Your role is to analyze requirements and create a comprehensive system design pl
 6. Provide a clear, step-by-step implementation plan
 
 ''' + function_signatures + '''
+Do NOT use these decorators yet. You will only plan how to use them to design the system.
 
 Your output should be structured as follows:
 
