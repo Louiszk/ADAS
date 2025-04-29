@@ -8,18 +8,19 @@ from dotenv import load_dotenv
 import re
 
 def parse_arguments(args_str):
-    args = {}
+    pos_args, kw_args = (), {}
     
     if args_str:
         try:
-            exec_str = f"def parsing_function(**kwargs): return kwargs\nargs = parsing_function({args_str})"
+            exec_str = f"def parsing_function(*args, **kwargs): return args, kwargs\npos_args, kw_args = parsing_function({args_str})"
             locals = {"HumanMessage" : HumanMessage, "START": START, "END": END}
             exec(exec_str, {}, locals)
-            args = locals.get('args', {})
+            pos_args = locals.get('pos_args', ())
+            kw_args = locals.get('kw_args', {})
         except Exception as e:
             print(f"Error parsing arguments: {e}")
     
-    return args
+    return pos_args, kw_args
 
 def parse_decorator_tool_calls(text):
     """Parse decorator-style tool calls from text."""
@@ -59,7 +60,7 @@ def parse_decorator_tool_calls(text):
                     if open_paren_pos != -1:
                         # Extract arguments
                         args_str, end_line_idx = extract_parenthesized_content(lines, i, open_paren_pos)
-                        args = parse_arguments(args_str)
+                        pos_args, kw_args = parse_arguments(args_str)
 
                         # Map decorator name to tool name if possible
                         tool_name = camelfy(decorator_name)
@@ -77,7 +78,7 @@ def parse_decorator_tool_calls(text):
                             content = '\n'.join(lines[code_start:code_end])
                             
                             param_name = code_related_tools[decorator_name]
-                            args[param_name] = content
+                            kw_args[param_name] = content
                             
                             i = code_end - 1
                         else:
@@ -85,7 +86,8 @@ def parse_decorator_tool_calls(text):
                         
                         tool_calls.append({
                             'name': tool_name,
-                            'args': args
+                            'pos_args': pos_args,
+                            'kw_args': kw_args
                         })
             
             i += 1
@@ -96,7 +98,7 @@ def execute_decorator_tool_calls(response, available_tools):
     """Execute decorator-style tool calls found in the text."""
     tool_calls = parse_decorator_tool_calls(response)
     if not tool_calls:
-        return [], {}
+        return None, {}
         
     tool_messages = []
     tool_results = {}
@@ -108,11 +110,17 @@ def execute_decorator_tool_calls(response, available_tools):
     
     for i, tool_call in enumerate(tool_calls):
         tool_name = tool_call['name']
-        tool_args = tool_call['args']
+        pos_args = tool_call.get('pos_args', ())
+        kw_args = tool_call.get('kw_args', {})
         
         if tool_name in available_tools:
             try:
-                result = available_tools[tool_name].invoke(tool_args)
+                tool = available_tools[tool_name]
+                
+                if hasattr(tool, 'func') and callable(tool.func):
+                    result = tool.func(*pos_args, **kw_args)
+                else:
+                    result = tool.invoke(kw_args)
                 
                 tool_messages.append(str(result) if result else f"Tool {tool_name} executed successfully.")
                 tool_results[tool_name] = result
