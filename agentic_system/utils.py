@@ -98,59 +98,58 @@ def extract_parenthesized_content(lines, start_line_idx, start_pos):
 
 def find_code_blocks(text: str) -> list[str]:
     """
-    Finds code blocks delimited by triple backticks (```) potentially on their own lines.
-    It ignores triple backticks when they appear inside multi-line triple-quoted strings.
+    Finds code blocks delimited by triple backticks (```) with proper handling of
+    nested triple quotes and triple backticks within strings.
     """
     lines = text.splitlines()
     code_blocks = []
-    current_block_lines = []
+    current_block = []
     in_code_block = False
     in_triple_string = False
-    triple_string_delimiter = None # Will store '"""' or "'''"
-
+    triple_string_type = None
+    
     for i, line in enumerate(lines):
-        is_delimiter_line = line.strip().startswith('```')
-        effective_line_content = line
-        start_search_pos = 0
-
-        while True:
-            next_triple_double = effective_line_content.find('"""', start_search_pos)
-            next_triple_single = effective_line_content.find("'''", start_search_pos)
-
-            # Find the earliest triple quote delimiter
-            if next_triple_double != -1 and (next_triple_single == -1 or next_triple_double < next_triple_single):
-                delim_pos = next_triple_double
-                current_delim = '"""'
-            elif next_triple_single != -1:
-                delim_pos = next_triple_single
-                current_delim = "'''"
-            else:
-                break
-
-            if in_triple_string:
-                if current_delim == triple_string_delimiter:
-                    in_triple_string = False
-                    triple_string_delimiter = None
-            else:
-                in_triple_string = True
-                triple_string_delimiter = current_delim
-
-            # Continue searching
-            start_search_pos = delim_pos + 3
-
-        if is_delimiter_line and not in_triple_string:
+        stripped = line.strip()
+        is_backtick_line = stripped.startswith('```')
+        
+        # Process backtick delimiters only when not in a triple-quoted string
+        if is_backtick_line and not in_triple_string:
             if not in_code_block:
-                # Start of a new code block
+                # Start a new code block
                 in_code_block = True
-                current_block_lines = []
+                current_block = []
             else:
-                # End of the current code block
+                # End current code block
                 in_code_block = False
-                if current_block_lines:
-                    code_blocks.append("\n".join(current_block_lines))
-                # Reset for potential next block
-                current_block_lines = []
-        elif in_code_block:
-            current_block_lines.append(line)
-
+                if current_block:
+                    code_blocks.append('\n'.join(current_block))
+                current_block = []
+            continue
+                
+        if in_code_block:
+            current_block.append(line)
+            
+            # Track triple-quoted string state within the line
+            j = 0
+            while j < len(line):
+                if j + 2 < len(line):
+                    next_chars = line[j:j+3]
+                    is_triple_quote = next_chars == '"""' or next_chars == "'''"
+                    # Check it's not escaped
+                    is_escaped = j > 0 and line[j-1] == '\\'
+                    
+                    if is_triple_quote and not is_escaped:
+                        if not in_triple_string:
+                            # Start triple-quoted string
+                            in_triple_string = True
+                            triple_string_type = next_chars
+                        elif triple_string_type == next_chars:
+                            # End matching triple-quoted string
+                            in_triple_string = False
+                            triple_string_type = None
+                        
+                        j += 3
+                        continue
+                j += 1
+        
     return code_blocks

@@ -1,21 +1,37 @@
-# Optimization Task: Enhance the MetaSystem
+# Optimization Task: Enhance the MetaSystem0
 
-You are tasked with optimizing the agentic system design tool, known as "MetaSystem". Its purpose is to receive ANY natural language problem description in "messages" and generate Python code for a functional LangGraph-based agentic system that solves it.
-The current MetaSystem is already functional. You have 120 iterations to optimize it. Try to come to an end and finalize the design as soon as you have reached this limit.
+You are part of an agentic system called "MetaMetaSystem0".
+You are tasked with optimizing the agentic system design tool, known as "MetaSystem0". Its purpose is to receive ANY natural language problem description in "messages" and generate Python code for a functional LangGraph-based agentic system that solves it.
+The current MetaSystem0 is already functional. You have 60 iterations to optimize it. Try to come to an end and finalize the design as soon as you have reached this limit.
 
-The current MetaSystem consists of:
-- A `MetaThinker` node for high-level planning.
+The current MetaSystem0 consists of:
+- A `MetaThinker` node for creating an initial, high-level plan.
 - A `MetaAgent` node for step-by-step implementation using decorator-based tools - this format is more effective than traditional function calling.
 - Tools for adding/editing/deleting components (nodes, tools, routers), managing imports, state, edges, system prompts, testing and finalizing the design.
 - Imports for a variety of helper functions that are useful to the system and should not be removed.
 
-**Optimization Goals:**
+## Optimization Goals
+Your primary goal is to improve the **efficiency and robustness** of the MetaSystem0's design process.
 
-Your primary goal is to improve the **efficiency and robustness** of the MetaSystem's design process. Specifically:
+### Current Problems
+1. **Superficial Testing and Premature Finalization:** The system declares success and ends the design if execution completes without errors, even if outputs are incorrect or misaligned with the task.
+2. **Context Window Limitations and Forgetfulness:** Message trimming causes the agent to forget prior actions, leading to redundant steps like re-installing packages or re-testing unchanged code.
+3. **Structural Flaws in Generated Graphs:** Generated StateGraphs may include dead ends, infinite loops, or unreachable nodes, even though @@test_system might succeed.
+4. **Placeholder Functionality:** The agent may generate stub functions or constant-return values that bypass testing without implementing real logic.
 
-1.  **Reduce Design Iterations:** Modify the `MetaAgent` and/or `MetaThinker` logic (or their system prompts via `@@system_prompt`) to produce correct designs more directly, requiring fewer loops/corrections within the `MetaAgent` node. Aim to reduce the total number of steps needed to arrive at a working system for a given problem description.
+### General Goals
+1.  **Reduce Design Iterations:** Modify the `MetaAgent` and/or `MetaThinker` logic (or their system prompts via `@@system_prompt`) to produce correct designs more directly, requiring fewer loops/corrections within the `MetaAgent` node. Aim to reduce the total number of steps needed to arrive at a working system.
 2.  **Improve Generated Code Quality:** Enhance the system's ability to generate `TargetSystem` code that is less prone to errors upon the *first* attempt. This might involve refining the prompts or logic to better anticipate common pitfalls in LangGraph design.
 3.  **Enhance Validation Awareness:** When tools fail, ensure the `MetaAgent` uses the results effectively. If the test fails, the `MetaAgent` should clearly identify the failure and propose specific corrections.
 4.  **Improve System Structure:** Decide if new components and workflows are needed to improve the system's capabilities.
 
-**Constraint:** Do *NOT* change the maximum iterations (currently => 58) for the target_agentic_system to end the design.
+### Constraints
+- Do *NOT* change the maximum iterations (currently => 58) for the target_agentic_system to end the design.
+- Do *NOT* change the maximum iterations (currently 20) for the test_system funciton.
+- Do *NOT* increase the context size of 8*2 messages.
+- Do *NOT* remove important helper functions.
+
+## Notes
+Remember that you are not part of the MetaSystem0 itself:
+- The tools you see in the Current Code are not the ones you use to design the MetaSystem0. You cannot change your own tools.
+- The system prompts you see and design may differ from your own instructions.

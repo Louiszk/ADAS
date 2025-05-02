@@ -294,7 +294,8 @@ def build_system():
     # Description: Tests the target system with a given state
     def test_system(state: Dict[str, Any]) -> str:
         """
-            Executes the current system with a simple test input state to validate functionality.
+            Executes the current system with a test input state to validate functionality.
+                state: A python dictionary with state attributes e.g. {"messages": ["Test Input"], "attr2": [3, 5]}
         """
         all_outputs = []
         error_message = ""
@@ -439,7 +440,6 @@ def build_system():
         code_message += ("\n---System Prompts File:\n" + prompt_code) if prompt_code else ""
     
         full_messages = [SystemMessage(content=meta_agent)] + initial_messages + trimmed_messages + [HumanMessage(content=code_message)]
-        print([getattr(last_msg, 'type', 'Unknown') for last_msg in full_messages])
         response = llm.invoke(full_messages)
     
         if not hasattr(response, 'content') or not response.content:

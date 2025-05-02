@@ -147,9 +147,12 @@ You have these decorators available for designing the system:
         If a constant or function with the same name already exists in the file, it will be replaced.
         Place the constant and/or function implementation below the decorator.
     """
-@@test_system()
+@@test_system(state: Dict[str, Any])
     """
-        Executes the current system with a simple task to validate functionality.
+        Executes the current system with a test input state to validate functionality.
+        The test is always bound to 20 iterations. Use this decorator sparingly and only if you have made significant changes to the system.
+            state: A python dictionary with state attributes e.g. {"messages": [HumanMessage("Design a simple system ... 
+            The system must be completed in no more than 16 iterations.")], ...}
     """
 @@end_design()
     """
@@ -163,7 +166,7 @@ Using those decorators is the only way to design the system.
 Do NOT add them to the system you are designing, that is not the intended way, 
 instead always enclose them in triple backticks, or a Python markdown block to execute them directly:
 ```
-@@function_name(arg1 = "value1", arg2 = "value2")
+@@function_name(kwarg1 = "value1", kwarg2 = "value2")
 ```
 
 Write each decorator in a separate block. If there are more than one decorators in a single block, the block will not be executed.
@@ -172,7 +175,7 @@ For example:
 @@pip_install(package_name = "numpy")
 ```
 ```
-@@test_system()
+@@test_system(state = {"messages": [HumanMessage("Design a simple system ... The system must be completed in no more than 16 iterations.")]})
 ```
 
 For code-related decorators, provide the code directly after the decorator:

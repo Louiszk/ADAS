@@ -6,6 +6,7 @@ import inspect
 from tqdm import tqdm
 import subprocess
 import io
+import time
 import json
 import contextlib
 from langgraph.graph import START, END
@@ -35,6 +36,7 @@ def create_meta_system():
         "from agentic_system.utils import get_filtered_packages, clean_messages",
         "from tqdm import tqdm",
         "import dill as pickle",
+        "import time",
         "import re",
         "import io",
         "import contextlib",
@@ -323,19 +325,13 @@ def create_meta_system():
     )
 
     # TestSystem tool
-    def test_system() -> str:
+    def test_system(state: Dict[str, Any]) -> str:
         """
             Executes the current system with a simple test input state to validate functionality.
         """
         final_state = {}
         error_message = ""
         stdout_capture = io.StringIO()
-        test_state = {"messages": [HumanMessage("\n".join([
-            'Design a very simple system that receives a list of integers and computes their sum.',
-            'Test the system with a state like this: {"messages": [], "list_of_integers": [9, 7, 5]}.',
-            'The final state of the system should include "solution": 21.',
-            "Therefore, the system's state must contain the attributes: 'list_of_integers': List[int] and 'solution': int."
-        ]))]}
         
         try:
             source_code, _ = materialize_system(target_system, output_dir=None)
@@ -351,9 +347,10 @@ def create_meta_system():
                 target_workflow, _ = namespace['build_system']()
                 pbar = tqdm(desc="Testing the System")
 
-                for output in target_workflow.stream(test_state, config={"recursion_limit": 20}):
+                for output in target_workflow.stream(state, config={"recursion_limit": 20}):
                     output["messages"] = clean_messages(output)
                     final_state = output
+                    time.sleep(2)
                     pbar.update(1)
             
             pbar.close()
@@ -367,15 +364,16 @@ def create_meta_system():
         result = "Final State: " + str(final_state)
         
         # Add captured stdout to the result
-        test_result = f"Test completed.\n <SystemStates>\n{result}\n</SystemStates>"
+        test_result = f"MetaSystem0 Test completed.\n <SystemStates>\n{result}\n</SystemStates>"
+        reminder = "\n\nAnalyze the results from MetaSystem0 and plan and act accordingly. Only execute @@test_system again, if you have made significant changes."
         std_out = ""
         if captured_output:
             std_out = f"\n\n<Stdout>\n{captured_output}\n</Stdout>"
             test_result += std_out
         if error_message:
-            return error_message + std_out
+            return test_result + error_message + reminder
         else:
-            return test_result
+            return test_result + reminder
     
     meta_system.create_tool(
         "TestSystem",
@@ -469,7 +467,7 @@ def create_meta_system():
         context_length = 8*2 # even
         messages = state.get("messages", [])
         iteration = len([msg for msg in messages if isinstance(msg, AIMessage)])
-        initial_messages, current_messages = messages[:3], messages[3:]
+        initial_messages, current_messages = messages[:2], messages[2:]
         try:
             trimmed_messages = trim_messages(
                 current_messages,
@@ -486,6 +484,7 @@ def create_meta_system():
         code_message += ("\n---System Prompts File:\n" + prompt_code) if prompt_code else ""
     
         full_messages = [SystemMessage(content=meta_agent)] + initial_messages + trimmed_messages + [HumanMessage(content=code_message)]
+        print([getattr(last_msg, 'type', 'Unknown') for last_msg in full_messages])
         response = llm.invoke(full_messages)
 
         if not hasattr(response, 'content') or not response.content:
@@ -514,7 +513,7 @@ def create_meta_system():
                         test_passed_recently = False
                         break
 
-            if test_passed_recently or iteration >= 118:
+            if test_passed_recently or iteration >= 58:
                 design_completed = True
             else:
                 if human_message and "Ending the design process..." in human_message.content:
