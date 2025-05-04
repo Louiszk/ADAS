@@ -108,21 +108,13 @@ You have these decorators available for designing the system:
             attributes: A python dictionary mapping attribute names to string type annotations. 
             {"messages": "List[Any]"} is the default and will be set automatically.
     """
-@@add_component(component_type: str, name: str, description: str)
+@@upsert_component(component_type: str, name: str, description: Optional[str] = None) -> str:
     """
-        Creates a component in the target system.
-            component_type: Type of component to create ('node', 'tool', or 'router')
-            name: Name of the component to add (for router, this is the source node name)
-            description: Description of the component
-            Place the Python code defining the component's function below the decorator.
-    """
-@@edit_component(component_type: str, name: str, new_description: Optional[str] = None)
-    """
-        Modifies an existing component's implementation.
-            component_type: Type of component to edit ('node', 'tool', or 'router')
-            name: Name of the component to edit (for router, this is the source node name)
-            new_description: Optional new description for the component
-            Place the new Python code for the component's function below the decorator.
+        Creates or updates a component in the target system.
+            component_type: Type of the component ('node', 'tool', or 'router')
+            name: Name of the component
+            description: Description of the component (required for new components)
+        Place the Python code defining the component's function below the decorator.
     """
 @@delete_component(component_type: str, name: str)
     """
@@ -179,7 +171,7 @@ For example:
 
 For code-related decorators, provide the code directly after the decorator:
 ```
-@@add_component(component_type = "node", name = "MyNode", description = "This is my custom node")
+@@upsert_component(component_type = "node", name = "MyNode", description = "This is my custom node")
 def node_function(state):
     # Node implementation
     messages = state.get("messages", [])
@@ -200,13 +192,12 @@ def agent2_prompt(value):
 ```
 
 The code-related decorators include:
-- @@add_component - Place the component function implementation below it
-- @@edit_component - Place the new function implementation below it
+- @@upsert_component - Place the component function implementation below it
 - @@system_prompt - Place the constant or function implementation below it
 
 For routers (conditional edges), use the decorator with component_type="router" and always name it the same as the source node:
 ```
-@@add_component(component_type = "router", name = "SourceNode", description = "Routes to different nodes based on some condition")
+@@upsert_component(component_type = "router", name = "SourceNode", description = "Routes to different nodes based on some condition")
 def router_function(state):
     # Analyze state and return next node name
     if some_condition:

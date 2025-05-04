@@ -32,8 +32,7 @@ def parse_decorator_tool_calls(text):
     
     # Code-related tools that need special handling
     code_related_tools = {
-        'add_component': 'function_code',
-        'edit_component': 'new_function_code',
+        'upsert_component': 'function_code',
         'system_prompt': 'system_prompt_code'
     }
     
@@ -151,7 +150,7 @@ def execute_decorator_tool_calls(response, available_tools):
             add_skipped_calls_message(i)
             break
 
-    tool_messages.append("Please continue according to the initial plan.")
+    tool_messages.append("Please continue according to the InitialPlan.")
     human_message = HumanMessage(content = "\n\n".join(tool_messages)) if tool_messages else None
                 
     return human_message, tool_results

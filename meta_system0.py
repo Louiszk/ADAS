@@ -147,14 +147,13 @@ def create_meta_system():
         set_state_attributes
     )
 
-    # AddComponent tool
-    def add_component(component_type: str, name: str, description: str, function_code: str = None) -> str:
+    def upsert_component(component_type: str, name: str, function_code: str, description: Optional[str] = None) -> str:
         """
-            Creates a component in the target system.
-                component_type: Type of component to create ('node', 'tool', or 'router')
+            Creates or updates a component in the target system.
+                component_type: Type of the component ('node', 'tool', or 'router')
                 name: Name of the component
-                description: Description of the component
-                function_code: Python code defining the component's function (required for all component types)
+                function_code: Python code defining the component's function
+                description: Description of the component (required for new components)
         """
         try:
             if component_type.lower() not in ["node", "tool", "router"]:
@@ -168,13 +167,36 @@ def create_meta_system():
             if isinstance(func, str) and func.startswith("!!Error"):
                 return func  # Return the error
                 
+            # Check if component exists
+            component_exists = False
+            if component_type.lower() == "node":
+                component_exists = name in target_agentic_system.nodes
+            elif component_type.lower() == "tool":
+                component_exists = name in target_agentic_system.tools
+            elif component_type.lower() == "router":
+                component_exists = name in target_agentic_system.conditional_edges
+            
+            # If new component but no description provided
+            if not component_exists and not description:
+                return f"!!Error: Description required when creating a new {component_type}"
+                
+            # Use existing description if updating without new description
+            if component_exists and not description:
+                if component_type.lower() == "node" and name in target_agentic_system.nodes:
+                    description = target_agentic_system.nodes[name].get("description", "")
+                elif component_type.lower() == "tool" and name in target_agentic_system.tools:
+                    description = target_agentic_system.tools[name].get("description", "")
+                
+            # Create or update the component
+            action = "updated" if component_exists else "created"
+            
             if component_type.lower() == "node":
                 target_agentic_system.create_node(name, description, func, function_code)
-                return f"Node '{name}' created successfully"
+                return f"Node '{name}' {action} successfully"
                 
             elif component_type.lower() == "tool":
                 target_agentic_system.create_tool(name, description, func, function_code)
-                return f"Tool '{name}' created successfully"
+                return f"Tool '{name}' {action} successfully"
                 
             elif component_type.lower() == "router":
                 target_agentic_system.create_conditional_edge(
@@ -183,67 +205,15 @@ def create_meta_system():
                     condition_code=function_code
                 )
                 
-                return f"Conditional edge from '{name}' added successfully"
+                return f"Conditional edge from '{name}' {action} successfully"
                 
         except Exception as e:
-            return f"!!Error creating {component_type}: {repr(e)}"
-    
+            return f"!!Error with {component_type}: {repr(e)}"
+        
     meta_system.create_tool(
-        "AddComponent",
-        "Adds a component (node, tool, or router) to the target system",
-        add_component
-    )
-
-    # EditComponent tool
-    def edit_component(component_type: str, name: str, new_function_code: str, new_description: Optional[str] = None) -> str:
-        """
-            Modifies an existing component's implementation.
-                component_type: Type of component to edit ('node', 'tool', or 'router')
-                name: Name of the component to edit
-                new_function_code: New Python code for the component's function
-                new_description: Optional new description for the component
-        """
-        try:
-            if component_type.lower() not in ["node", "tool", "router"]:
-                return f"!!Error: Invalid component type '{component_type}'. Must be 'node', 'tool', or 'router'."
-                
-            new_function = target_agentic_system.get_function(new_function_code)
-            if isinstance(new_function, str) and new_function.startswith("Error"):
-                return new_function  # Return the error
-                
-            if component_type.lower() == "node":
-                if name not in target_agentic_system.nodes:
-                    return f"!!Error: Node '{name}' not found"
-                
-                target_agentic_system.create_node(name, new_description, new_function, new_function_code)
-                return f"Node '{name}' updated successfully"
-                
-            elif component_type.lower() == "tool":
-                if name not in target_agentic_system.tools:
-                    return f"!!Error: Tool '{name}' not found"
-                
-                target_agentic_system.create_tool(name, new_description, new_function, new_function_code)
-                return f"Tool '{name}' updated successfully"
-                
-            elif component_type.lower() == "router":
-                if name not in target_agentic_system.conditional_edges:
-                    return f"!!Error: Router for node '{name}' not found"
-                    
-                target_agentic_system.create_conditional_edge(
-                    source=name,
-                    condition=new_function,
-                    condition_code=new_function_code
-                )
-                
-                return f"Router for node '{name}' updated successfully"
-                
-        except Exception as e:
-            return f"!!Error editing {component_type}: {repr(e)}"
-    
-    meta_system.create_tool(
-        "EditComponent",
-        "Edits a component's implementation",
-        edit_component
+        "UpsertComponent",
+        "Creates or updates a component",
+        upsert_component
     )
 
     # DeleteComponent tool
@@ -434,6 +404,7 @@ def create_meta_system():
         full_messages = [SystemMessage(content=meta_thinker)] + messages + [HumanMessage(content=code_message)]
         print("Thinking...")
         response = llm.invoke(full_messages)
+        response.content = "InitialPlan:\n\n" + response.content
 
         transition_message = HumanMessage(content= "\n".join([
             "Thank you for the detailed plan. Please implement this system design step by step.",
