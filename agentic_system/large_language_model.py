@@ -150,7 +150,7 @@ def execute_decorator_tool_calls(response, available_tools):
             add_skipped_calls_message(i)
             break
 
-    tool_messages.append("Please continue according to the InitialPlan.")
+    # tool_messages.append("Please continue according to the InitialPlan.")
     human_message = HumanMessage(content = "\n\n".join(tool_messages)) if tool_messages else None
                 
     return human_message, tool_results

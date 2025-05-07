@@ -269,17 +269,22 @@ def build_system():
 
     tools["SystemPrompt"] = tool(runnable=system_prompt, name_or_callable="SystemPrompt")
 
-    # Tool: TestSystem
-    # Description: Tests the target system with a given state
-    def test_system(state: Dict[str, Any]) -> str:
+    # Tool: TestMetaSystem
+    # Description: Tests the meta system with a given state
+    def test_meta_system(state: Dict[str, Any]) -> str:
         """
             Executes the current system with a simple test input state to validate functionality.
         """
         final_state = {}
         error_message = ""
+        task = None
         stdout_capture = io.StringIO()
     
         try:
+            if state["messages"][0] and state["messages"][0].content:
+                state["messages"][0].content += "\nThe system must be completed in no more than 16 iterations."
+                task = state["messages"][0].content
+    
             source_code, _ = materialize_system(target_system, output_dir=None)
             namespace = {}
     
@@ -291,7 +296,7 @@ def build_system():
                     raise Exception("Could not find build_system function in generated code")
     
                 target_workflow, _ = namespace['build_system']()
-                pbar = tqdm(desc="Testing the System")
+                pbar = tqdm(desc="Testing the MetaSystem")
     
                 for output in target_workflow.stream(state, config={"recursion_limit": 20}):
                     output["messages"] = clean_messages(output)
@@ -302,7 +307,11 @@ def build_system():
             pbar.close()
     
         except Exception as e:
-            error_message = f"\n\n !!Error while testing the system:\n{repr(e)}"
+            error_message = f"\n\n !!Error while executing the MetaSystem:"
+            if "GraphRecursionError" in repr(e):
+                error_message += "The MetaSystem was unable to end the design process within the 20 iterations limit."
+            else:
+                error_message += f"\n{repr(e)}"
     
         # Always capture stdout after try block
         captured_output = stdout_capture.getvalue()
@@ -312,9 +321,10 @@ def build_system():
         # Add captured stdout to the result
         test_result = f"MetaSystem0 Test completed.\n <FinalState>\n{result}\n</FinalState>"
         reminder = "\n\nAnalyze the results of how MetaSystem0 designed a TargetSystem, and plan and act accordingly."
-        reminder += "\n\nIMPORTANT:\nYou cannot and should not try to change the TargetSystem designed during this test."
-        reminder += "\nYou can only make changes to the MetaSystem0."
-        reminder += "\nOnly execute @@test_system again, if you have made significant changes to the MetaSystem0."
+        reminder += "\n\nIMPORTANT:\nYou cannot and should not try to fix the TargetSystem designed during this test. You can only make changes to the MetaSystem0."
+        reminder += f"\nIgnore these instructions you gave the MetaSystem0: \"{task if task else state}\". Remember that you task is to optimize the MetaSystem0."
+        reminder += "\nIf everything is working properly, end the design. Otherwise, identify the problems and resolve them."
+        reminder += "\nDo not execute @@test_meta_system again until you have made the necessary fixes to MetaSystem0."
         std_out = ""
         if captured_output:
             std_out = f"\n\n<Stdout>\n{captured_output}\n</Stdout>"
@@ -325,7 +335,7 @@ def build_system():
             return test_result + reminder
     
 
-    tools["TestSystem"] = tool(runnable=test_system, name_or_callable="TestSystem")
+    tools["TestMetaSystem"] = tool(runnable=test_meta_system, name_or_callable="TestMetaSystem")
 
     # Tool: DeleteEdge
     # Description: Deletes an edge between nodes in the target system
@@ -388,7 +398,7 @@ def build_system():
     
         transition_message = HumanMessage(content= "\n".join([
             "Thank you for the detailed plan. Please implement this system design step by step.",
-            "Start by setting up the state attributes, imports and installing the necessary packages."
+            "Never deviate from the plan. This plan is now your road map."
             ]))
         updated_messages = messages + [response, transition_message] 
     
@@ -407,7 +417,7 @@ def build_system():
         context_length = 8*2 # even
         messages = state.get("messages", [])
         iteration = len([msg for msg in messages if isinstance(msg, AIMessage)])
-        initial_messages, current_messages = messages[:2], messages[2:]
+        initial_messages, current_messages = messages[:3], messages[3:]
         try:
             trimmed_messages = trim_messages(
                 current_messages,
@@ -459,7 +469,7 @@ def build_system():
                 if human_message and "Ending the design process..." in human_message.content:
                     human_message.content = human_message.content.replace(
                         "Ending the design process...",
-                        "Error: Cannot finalize the design. Please run successful tests using @@test_system first."
+                        "Error: Cannot finalize the design. Please run successful tests using @@test_meta_system first."
                     )
     
         new_state = {"messages": updated_messages, "design_completed": design_completed}

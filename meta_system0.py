@@ -160,7 +160,7 @@ def create_meta_system():
                 return f"!!Error: Invalid component type '{component_type}'. Must be 'node', 'tool', or 'router'."
             
             if not function_code:
-                return f"!!Error: function_code is required for all component types"
+                return f"!!Error: You must provide the function implementation below the decorator, not as argument."
                 
             # Get the function implementation from the code
             func = target_agentic_system.get_function(function_code)
@@ -328,14 +328,16 @@ def create_meta_system():
         
         # Add captured stdout to the result
         test_result = f"Test completed.\n <SystemStates>\n{result}\n</SystemStates>"
+        reminder = "\n\nAnalyze the results of the TargetSystem, and plan and act accordingly."
+        reminder += "\nIf everything is working properly, end the design. Otherwise, identify the problems and resolve them."
         std_out = ""
         if captured_output:
             std_out = f"\n\n<Stdout>\n{captured_output}\n</Stdout>"
             test_result += std_out
         if error_message:
-            return error_message + std_out
+            return error_message + std_out + reminder
         else:
-            return test_result
+            return test_result + reminder
     
     meta_system.create_tool(
         "TestSystem",
@@ -404,11 +406,10 @@ def create_meta_system():
         full_messages = [SystemMessage(content=meta_thinker)] + messages + [HumanMessage(content=code_message)]
         print("Thinking...")
         response = llm.invoke(full_messages)
-        response.content = "InitialPlan:\n\n" + response.content
 
         transition_message = HumanMessage(content= "\n".join([
             "Thank you for the detailed plan. Please implement this system design step by step.",
-            "Start by setting up the state attributes, imports and installing the necessary packages."
+            "Never deviate from the plan. This plan is now your road map."
             ]))
         updated_messages = messages + [response, transition_message] 
 
@@ -459,6 +460,8 @@ def create_meta_system():
             updated_messages.append(human_message)
         else:
             updated_messages.append(HumanMessage(content="You made no valid function calls. Remember to use the @@decorator_name() syntax."))
+        if iteration == 50:
+            updated_messages.append(HumanMessage(content="You have reached 50 iterations. Try to finish during the next iterations, run a successful test and end the design."))
 
             
         # Ending the design if the last test ran without errors (this does not check accuracy)

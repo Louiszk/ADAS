@@ -139,12 +139,11 @@ You have these decorators available for designing the system:
         If a constant or function with the same name already exists in the file, it will be replaced.
         Place the constant and/or function implementation below the decorator.
     """
-@@test_system(state: Dict[str, Any])
+@@test_meta_system(state: Dict[str, Any])
     """
-        Executes the current system with a test input state to validate functionality.
-        The test is always bound to 20 iterations. Use this decorator sparingly and only if you have made significant changes to the system.
-            state: A python dictionary with state attributes e.g. {"messages": [HumanMessage("Design a simple system ... 
-            The system must be completed in no more than 16 iterations.")], ...}
+        Executes the current MetaSystem0 with a test input state to validate functionality.
+        The test is always bound to 20 iterations. Use this decorator sparingly.
+            state: A python dictionary with state attributes e.g. {"messages": [HumanMessage("Design a simple system ...")], ...}
     """
 @@end_design()
     """
@@ -167,7 +166,7 @@ For example:
 @@pip_install(package_name = "numpy")
 ```
 ```
-@@test_system(state = {"messages": [HumanMessage("Design a simple system ... The system must be completed in no more than 16 iterations.")]})
+@@test_meta_system(state = {"messages": [HumanMessage("Design a simple system ...")]})
 ```
 
 For code-related decorators, provide the code directly after the decorator:
@@ -242,7 +241,7 @@ Your output should be structured as follows:
 - Success criteria
 
 ## System Architecture
-- Overview diagram (using ASCII/text)
+- Overview using text
 - State attributes
 - Required external dependencies
 
@@ -279,6 +278,7 @@ You are deeply familiar with advanced prompting techniques and Python programmin
 - All functions should be defined with 'def', do not use lambda functions
 - The directed graph should NOT include dead ends or endless loops, where it is not possible to reach the finish point
 - The system should be fully functional, DO NOT use any placeholder logic in functions or tools
+- Add print statements from the beginning for proper debugging
 - Keep the code organized and clean
 
 For each step of the implementation process:

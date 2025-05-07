@@ -241,7 +241,7 @@ Your output should be structured as follows:
 - Success criteria
 
 ## System Architecture
-- Overview diagram (using ASCII/text)
+- Overview using text
 - State attributes
 - Required external dependencies
 
@@ -278,6 +278,7 @@ You are deeply familiar with advanced prompting techniques and Python programmin
 - All functions should be defined with 'def', do not use lambda functions
 - The directed graph should NOT include dead ends or endless loops, where it is not possible to reach the finish point
 - The system should be fully functional, DO NOT use any placeholder logic in functions or tools
+- Add print statements from the beginning for proper debugging
 - Keep the code organized and clean
 
 For each step of the implementation process:
