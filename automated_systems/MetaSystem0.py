@@ -12,12 +12,13 @@ from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, Tool
 from langgraph.graph import StateGraph, START, END
 from langchain_core.tools import tool
 import os
-from agentic_system.utils import get_filtered_packages, clean_messages
+from agentic_system.utils import get_filtered_packages, clean_messages, get_metrics
 from agentic_system.virtual_agentic_system import VirtualAgenticSystem
 from agentic_system.materialize import materialize_system
 target_agentic_system = VirtualAgenticSystem('TargetSystem')
 from tqdm import tqdm
 import dill as pickle
+import time
 import re
 import io
 import contextlib
@@ -271,15 +272,23 @@ def build_system():
                 state: A python dictionary with state attributes e.g. {"messages": ["Test Input"], "attr2": [3, 5]}
         """
         all_outputs = []
+        raw_outputs = []
         error_message = ""
         stdout_capture = io.StringIO()
+        stderr_capture = io.StringIO()
+        start_time = time.time()
     
         try:
+            # Validate graph structure before execution
+            validation_errors = target_agentic_system.validate_graph()
+            if validation_errors:
+                return "!!Error: Graph validation failed:\n" + "\n".join(validation_errors)
+    
             source_code, _ = materialize_system(target_agentic_system, output_dir=None)
             namespace = {}
     
-            # Capture stdout during execution
-            with contextlib.redirect_stdout(stdout_capture):
+            # Capture stdout and stderr during execution
+            with contextlib.redirect_stdout(stdout_capture), contextlib.redirect_stderr(stderr_capture):
                 exec(source_code, namespace, namespace)
     
                 if 'build_system' not in namespace:
@@ -289,6 +298,7 @@ def build_system():
                 pbar = tqdm(desc="Testing the System")
     
                 for output in target_workflow.stream(state, config={"recursion_limit": 20}):
+                    raw_outputs.append(output.copy())  # Store raw output for metrics
                     output["messages"] = clean_messages(output)
                     all_outputs.append(output)
                     pbar.update(1)
@@ -298,23 +308,39 @@ def build_system():
         except Exception as e:
             error_message = f"\n\n !!Error while testing the system:\n{repr(e)}"
     
-        # Always capture stdout after try block
-        captured_output = stdout_capture.getvalue()
+        # Calculate execution time and metrics
+        end_time = time.time()
+        duration = end_time - start_time
+        metrics = get_metrics(raw_outputs, duration)
+    
+        # Capture console output
+        captured_output = ""
+        if stdout := stdout_capture.getvalue():
+            captured_output += f"\n\n<STDOUT>\n{stdout}\n</STDOUT>"
+        if stderr := stderr_capture.getvalue():
+            captured_output += f"\n<STDERR>\n{stderr}\n</STDERR>"
+    
+        # Format metrics for display
+        metrics_str = "\n\n<Metrics>\n"
+        metrics_str += f"Iterations: {metrics['total_iterations']}\n"
+        metrics_str += f"Duration: {metrics['duration_seconds']} seconds\n"
+        metrics_str += f"LLM Calls: {metrics['llm_calls']}\n"
+        metrics_str += f"Tokens: {metrics['token_usage']['total_tokens']} "
+        metrics_str += f"(Input: {metrics['token_usage']['input_tokens']}, "
+        metrics_str += f"Output: {metrics['token_usage']['output_tokens']})\n"
+        metrics_str += "</Metrics>"
     
         result = "\n".join([f"State {i}: " + str(out) for i, out in enumerate(all_outputs)]) if all_outputs else {}
     
-        # Add captured stdout to the result
+        # Construct the final result with metrics
         test_result = f"Test completed.\n <SystemStates>\n{result}\n</SystemStates>"
+        test_result += metrics_str
+        test_result += captured_output
+    
         reminder = "\n\nAnalyze the results of the TargetSystem, and plan and act accordingly."
         reminder += "\nIf everything is working properly, end the design. Otherwise, identify the problems and resolve them."
-        std_out = ""
-        if captured_output:
-            std_out = f"\n\n<Stdout>\n{captured_output}\n</Stdout>"
-            test_result += std_out
-        if error_message:
-            return error_message + std_out + reminder
-        else:
-            return test_result + reminder
+    
+        return test_result + error_message + reminder
     
 
     tools["TestSystem"] = tool(runnable=test_system, name_or_callable="TestSystem")
@@ -438,10 +464,10 @@ def build_system():
             search_start_index = max(0, len(messages) - 4)
             for msg in reversed(updated_messages[search_start_index:]):
                 if isinstance(msg, HumanMessage) and hasattr(msg, 'content'):
-                    if "Test completed." in msg.content and not "Error while testing the system" in msg.content:
+                    if "Test completed." in msg.content and not "!!Error" in msg.content:
                         test_passed_recently = True
                         break
-                    elif "Error while testing the system" in msg.content:
+                    elif "!!Error" in msg.content:
                         test_passed_recently = False
                         break
     

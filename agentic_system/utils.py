@@ -24,15 +24,19 @@ def clean_messages(output):
     cleaned_messages = []
     if "messages" in output:
         for message in output["messages"]:
-            cleaned_message = getattr(message, 'type', 'Unknown') + ": "
+            cleaned_message_str = getattr(message, 'type', 'Unknown') + ": "
             if hasattr(message, 'content') and message.content:
-                cleaned_message += message.content
+                cleaned_message_str += str(message.content)
             if hasattr(message, 'tool_calls') and message.tool_calls:
-                cleaned_message += str(message.tool_calls)
-            if not hasattr(message, 'content') and not hasattr(message, 'tool_calls'):
-                cleaned_message += str(message)
-            cleaned_messages.append(cleaned_message)
+                cleaned_message_str += str(message.tool_calls)
+            if not (hasattr(message, 'content') and message.content) and \
+               not (hasattr(message, 'tool_calls') and message.tool_calls):
+                cleaned_message_str += str(message)
+            cleaned_messages.append(cleaned_message_str)
+    else:
+        print('Warning: No "messages" key found.')
     return cleaned_messages
+
 
 def extract_parenthesized_content(lines, start_line_idx, start_pos):
     """Extract content inside matching parentheses, handling multi-line cases and preserving structure."""
@@ -96,7 +100,7 @@ def extract_parenthesized_content(lines, start_line_idx, start_pos):
     
     return "\n".join(content), line_idx - 1
 
-def find_code_blocks(text: str) -> list[str]:
+def find_code_blocks(text):
     """
     Finds code blocks delimited by triple backticks (```) with proper handling of
     nested triple quotes and triple backticks within strings.
@@ -153,3 +157,40 @@ def find_code_blocks(text: str) -> list[str]:
                 j += 1
         
     return code_blocks
+
+def get_metrics(raw_stream_outputs, duration):
+    total_iterations = len(raw_stream_outputs)
+    input_tokens = 0
+    output_tokens = 0
+    total_tokens = 0
+    llm_calls = 0
+    processed_message_ids = set()
+    
+    for step_output_dict in raw_stream_outputs:
+        if "messages" in step_output_dict:
+            messages_in_node_output = step_output_dict.get("messages")
+            for msg in messages_in_node_output:
+                msg_id = getattr(msg, 'id', None)
+                if msg_id and msg_id in processed_message_ids:
+                    continue
+                if hasattr(msg, 'usage_metadata') and msg.usage_metadata:
+                    usage = msg.usage_metadata
+                    input_tokens += usage.get('input_tokens', 0)
+                    output_tokens += usage.get('output_tokens', 0)
+                    total_tokens += usage.get('total_tokens', 0)
+                    llm_calls += 1
+                    if msg_id:
+                        processed_message_ids.add(msg_id)
+        else:
+            print('Warning: No "messages" key found.')
+                            
+    return {
+        "total_iterations": total_iterations,
+        "duration_seconds": round(duration, 3),
+        "llm_calls": llm_calls,
+        "token_usage": {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_tokens": total_tokens,
+        }
+    }

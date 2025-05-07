@@ -13,7 +13,7 @@ from langgraph.graph import StateGraph, START, END
 from langchain_core.tools import tool
 import os
 from agentic_system.materialize import materialize_system
-from agentic_system.utils import get_filtered_packages, clean_messages
+from agentic_system.utils import get_filtered_packages, clean_messages, get_metrics
 from tqdm import tqdm
 import dill as pickle
 import time
@@ -95,12 +95,13 @@ def build_system():
                 "from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage, trim_messages",
                 "from langgraph.graph import StateGraph, START, END",
                 "from langchain_core.tools import tool",
-                "from agentic_system.utils import get_filtered_packages, clean_messages",
+                "from agentic_system.utils import get_filtered_packages, clean_messages, get_metrics",
                 "from agentic_system.virtual_agentic_system import VirtualAgenticSystem",
                 "from agentic_system.materialize import materialize_system",
                 "target_agentic_system = VirtualAgenticSystem('TargetSystem')",
                 "from tqdm import tqdm",
                 "import dill as pickle",
+                "import time",
                 "import os",
                 "import re",
                 "import io",
@@ -151,7 +152,7 @@ def build_system():
                 return f"!!Error: Invalid component type '{component_type}'. Must be 'node', 'tool', or 'router'."
     
             if not function_code:
-                return f"!!Error: function_code is required for all component types"
+                return f"!!Error: You must provide the function implementation below the decorator, not as argument."
     
             # Get the function implementation from the code
             func = target_system.get_function(function_code)
@@ -276,11 +277,19 @@ def build_system():
             Executes the current system with a simple test input state to validate functionality.
         """
         final_state = {}
+        raw_outputs = []
         error_message = ""
         task = None
         stdout_capture = io.StringIO()
+        stderr_capture = io.StringIO()
+        start_time = time.time()
     
         try:
+            # Validate graph structure before execution
+            validation_errors = target_system.validate_graph()
+            if validation_errors:
+                return "!!Error: Graph validation failed:\n" + "\n".join(validation_errors)
+    
             if state["messages"][0] and state["messages"][0].content:
                 state["messages"][0].content += "\nThe system must be completed in no more than 16 iterations."
                 task = state["messages"][0].content
@@ -288,8 +297,7 @@ def build_system():
             source_code, _ = materialize_system(target_system, output_dir=None)
             namespace = {}
     
-            # Capture stdout during execution
-            with contextlib.redirect_stdout(stdout_capture):
+            with contextlib.redirect_stdout(stdout_capture), contextlib.redirect_stderr(stderr_capture):
                 exec(source_code, namespace, namespace)
     
                 if 'build_system' not in namespace:
@@ -299,6 +307,7 @@ def build_system():
                 pbar = tqdm(desc="Testing the MetaSystem")
     
                 for output in target_workflow.stream(state, config={"recursion_limit": 20}):
+                    raw_outputs.append(output.copy())
                     output["messages"] = clean_messages(output)
                     final_state = output
                     time.sleep(2)
@@ -313,26 +322,41 @@ def build_system():
             else:
                 error_message += f"\n{repr(e)}"
     
-        # Always capture stdout after try block
-        captured_output = stdout_capture.getvalue()
+        # Calculate metrics
+        end_time = time.time()
+        duration = end_time - start_time
+        metrics = get_metrics(raw_outputs, duration)
+    
+        # Format output
+        captured_output = ""
+        if stdout := stdout_capture.getvalue():
+            captured_output += f"\n\n<STDOUT>\n{stdout}\n</STDOUT>"
+        if stderr := stderr_capture.getvalue():
+            captured_output += f"\n<STDERR>\n{stderr}\n</STDERR>"
+    
+        # Format metrics
+        metrics_str = "\n\n<Metrics>\n"
+        metrics_str += f"Iterations: {metrics['total_iterations']}\n"
+        metrics_str += f"Duration: {metrics['duration_seconds']} seconds\n"
+        metrics_str += f"LLM Calls: {metrics['llm_calls']}\n"
+        metrics_str += f"Tokens: {metrics['token_usage']['total_tokens']} "
+        metrics_str += f"(Input: {metrics['token_usage']['input_tokens']}, "
+        metrics_str += f"Output: {metrics['token_usage']['output_tokens']})\n"
+        metrics_str += "</Metrics>"
     
         result = str(final_state)
     
-        # Add captured stdout to the result
         test_result = f"MetaSystem0 Test completed.\n <FinalState>\n{result}\n</FinalState>"
+        test_result += metrics_str
+        test_result += captured_output
+    
         reminder = "\n\nAnalyze the results of how MetaSystem0 designed a TargetSystem, and plan and act accordingly."
         reminder += "\n\nIMPORTANT:\nYou cannot and should not try to fix the TargetSystem designed during this test. You can only make changes to the MetaSystem0."
         reminder += f"\nIgnore these instructions you gave the MetaSystem0: \"{task if task else state}\". Remember that you task is to optimize the MetaSystem0."
         reminder += "\nIf everything is working properly, end the design. Otherwise, identify the problems and resolve them."
         reminder += "\nDo not execute @@test_meta_system again until you have made the necessary fixes to MetaSystem0."
-        std_out = ""
-        if captured_output:
-            std_out = f"\n\n<Stdout>\n{captured_output}\n</Stdout>"
-            test_result += std_out
-        if error_message:
-            return test_result + error_message + reminder
-        else:
-            return test_result + reminder
+    
+        return test_result + error_message + reminder
     
 
     tools["TestMetaSystem"] = tool(runnable=test_meta_system, name_or_callable="TestMetaSystem")
@@ -447,6 +471,8 @@ def build_system():
             updated_messages.append(human_message)
         else:
             updated_messages.append(HumanMessage(content="You made no valid function calls. Remember to use the @@decorator_name() syntax."))
+        if iteration == 50:
+            updated_messages.append(HumanMessage(content="You have reached 50 iterations. Try to finish during the next iterations, run a successful test and end the design."))
     
     
         # Ending the design if the last test ran without errors (this does not check accuracy)
@@ -456,10 +482,10 @@ def build_system():
             search_start_index = max(0, len(messages) - 4)
             for msg in reversed(updated_messages[search_start_index:]):
                 if isinstance(msg, HumanMessage) and hasattr(msg, 'content'):
-                    if "Test completed." in msg.content and not "Error while testing the system" in msg.content:
+                    if "Test completed." in msg.content and not "!!Error" in msg.content:
                         test_passed_recently = True
                         break
-                    elif "Error while testing the system" in msg.content:
+                    elif "!!Error" in msg.content:
                         test_passed_recently = False
                         break
     
