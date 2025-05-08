@@ -362,7 +362,8 @@ def create_meta_system():
         test_result += captured_output
         
         reminder = "\n\nAnalyze the results of the TargetSystem, and plan and act accordingly."
-        reminder += "\nIf everything is working properly, end the design. Otherwise, identify the problems and resolve them."
+        reminder += "\nIf everything is working properly with different test cases, end the design."
+        reminder += "Otherwise, identify the ROOT CAUSES of the problems and resolve them."
 
         return test_result + error_message + reminder
     

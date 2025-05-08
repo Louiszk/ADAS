@@ -353,7 +353,8 @@ def build_system():
         reminder = "\n\nAnalyze the results of how MetaSystem0 designed a TargetSystem, and plan and act accordingly."
         reminder += "\n\nIMPORTANT:\nYou cannot and should not try to fix the TargetSystem designed during this test. You can only make changes to the MetaSystem0."
         reminder += f"\nIgnore these instructions you gave the MetaSystem0: \"{task if task else state}\". Remember that you task is to optimize the MetaSystem0."
-        reminder += "\nIf everything is working properly, end the design. Otherwise, identify the problems and resolve them."
+        reminder += "\nIf everything is working properly with different test cases, end the design."
+        reminder += "Otherwise, identify the ROOT CAUSES of the problems and resolve them."
         reminder += "\nDo not execute @@test_meta_system again until you have made the necessary fixes to MetaSystem0."
     
         return test_result + error_message + reminder

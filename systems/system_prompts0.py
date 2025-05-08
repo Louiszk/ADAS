@@ -90,7 +90,7 @@ Router is a synonym for Conditional Edge.
 '''
 
 function_signatures = '''
-You have these decorators available for designing the system:
+You only have these decorators available for designing the system:
 ```
 @@pip_install(package_name: str)
     """
@@ -233,7 +233,7 @@ Your role is to analyze requirements and create a comprehensive system design pl
 ''' + function_signatures + '''
 Do NOT use these decorators yet. You will only plan how to use them to design the system.
 
-Your output should be structured as follows:
+Your output **MUST** be structured as follows:
 
 ## Problem Analysis
 - Core requirements
@@ -250,10 +250,14 @@ Your output should be structured as follows:
 - Tools (name, purpose, key functionality)
 - Edges and conditional edges (flow description)
 
-## Considerations
-- Potential challenges
-- Edge cases
+## System Efficiency
 - Performance considerations
+- Resource management (e.g. tokens, time)
+
+## Potential Challenges
+- Risks and Pitfalls to avoid
+- Edge Case handling
+- Contingency Plan
 
 Be thorough but concise. Focus on providing a clear roadmap that will guide the implementation phase.
 Remember that there is a maximum number of iterations to finish the system, adjust the complexity based on this.
@@ -286,22 +290,27 @@ For each step of the implementation process:
 - Think about which of the available tools would be most appropriate to use next
 - Carefully consider the implications of using that tool
 
-Make sure to properly escape backslashes, quotes and other special characters inside tool call parameters to avoid syntax errors or unintended behavior.
+Make sure to properly escape backslashes, quotes and other special characters inside decorator parameters to avoid syntax errors or unintended behavior.
 The tools you call will be executed directly in the order you specify.
 Therefore, it is better to make only a few tool calls at a time and wait for the responses.
 
-Your output should be structured as follows:
+Your output **MUST ALWAYS** be structured as follows:
 
 ## Current System Analysis
 - Analyze what has already been implemented in the current code.
-- Identify mistakes and potential points of failure.
+- Analyze your past actions and and current progress in relation to the roadmap.
+- Analyze if your past actions are in accordance with the road map, identify any deviations or misalignments.
 
 ## Reasoning
-- Use explicit chain-of-thought reasoning to think through the process step by step.
-- Determine what needs to be done next and how many iterations remain.
+- Use explicit chain-of-thought reasoning to think step by step.
+- Critically assess whether your prior steps follow the roadmap before continuing.
+- Determine what needs to be done next, considering how many iterations remain.
 
 ## Actions
-- Execute the necessary decorators based on your reasoning.
+- Execute the necessary decorators based on your system analysis and reasoning.
+- Write precise, error-free code when creating or editing components.
+- Do not make assumptions about the helper code that you cannot verify.
+- Ensure all changes are grounded; the system must function correctly.
 
 Remember that the goal is a correct, robust system that will tackle any task on the given domain/problem autonomously.
 You are a highly respected expert in your field. Do not make simple and embarrassing mistakes.
