@@ -208,10 +208,10 @@ This will add a conditional edge from SourceNode to NodeA or NodeB based on some
 
 Use START and END as special node names for setting entry and exit points:
 ```
-@@add_edge(source = START, target = "FirstNode")  # Sets FirstNode as the entry point "__start__" -> "FirstNode"
+@@add_edge(source = START, target = "FirstNode") # Sets FirstNode as the entry point "__start__" -> "FirstNode"
 ```
 ```
-@@add_edge(source = "LastNode", target = END)     # Sets LastNode as the finish point "LastNode" -> __end__
+@@add_edge(source = "LastNode", target = END) # Sets LastNode as the finish point "LastNode" -> "__end__"
 ```
 """
 
@@ -285,14 +285,9 @@ You are deeply familiar with advanced prompting techniques and Python programmin
 - Add print statements from the beginning for proper debugging
 - Keep the code organized and clean
 
-For each step of the implementation process:
-- Analyze what has been implemented so far in the current code and what needs to be done next
-- Think about which of the available tools would be most appropriate to use next
-- Carefully consider the implications of using that tool
-
 Make sure to properly escape backslashes, quotes and other special characters inside decorator parameters to avoid syntax errors or unintended behavior.
-The tools you call will be executed directly in the order you specify.
-Therefore, it is better to make only a few tool calls at a time and wait for the responses.
+The decorators will be executed directly in the order you specify. If an execution fails, all subsequent decorators will not be executed.
+Therefore, it is better to execute only a few decorators at a time and wait for the responses.
 
 Your output **MUST ALWAYS** be structured as follows:
 
@@ -309,6 +304,7 @@ Your output **MUST ALWAYS** be structured as follows:
 ## Actions
 - Execute the necessary decorators based on your system analysis and reasoning.
 - You can execute multiple decorators, but remember to use one markdown block per decorator.
+- Carefully consider the implications of using these decorators.
 - Write precise, error-free code when creating or editing components.
 - Do not make assumptions about the helper code that you cannot verify.
 - Ensure all changes are grounded; the system must function correctly.
