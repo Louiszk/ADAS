@@ -168,6 +168,15 @@ You only have these decorators available for designing the system:
         If a constant or function with the same name already exists in the file, it will be replaced.
         Place the constant and/or function implementation below the decorator.
     """
+@@test_component(component_type: str, name: str, inputs: Dict[str, Any])
+    """
+        Tests a single component function with the provided inputs.
+            component_type: Type of component to test ('node', 'tool', or 'router')
+            name: Name of the component to test
+            inputs: Dictionary containing the inputs to the function
+                - For nodes and routers: {"state": {...}}
+                - For tools: {"kwarg1": value1, ...}
+    """
 @@test_system(state: Dict[str, Any])
     """
         Executes the current system with a test input state to validate functionality.
@@ -199,6 +208,15 @@ For example:
 
 For code-related decorators, provide the code directly after the decorator:
 ```
+@@system_prompt()
+# constant system prompt
+AGENT1_PROMPT = '''...'''
+
+# dynamic system prompt as function
+def agent2_prompt(value):
+    return f'''...{value}...'''
+```
+```
 @@upsert_component(component_type = "node", name = "MyNode", description = "This is my custom node")
 def node_function(state):
     # Node implementation
@@ -208,15 +226,9 @@ def node_function(state):
     
     return {"messages": messages}
 ```
-
+A typical design pattern is to follow @@upsert_component with @@test_component:
 ```
-@@system_prompt()
-# constant system prompt
-AGENT1_PROMPT = '''...'''
-
-# dynamic system prompt as function
-def agent2_prompt(value):
-    return f'''...{value}...'''
+@@test_component(component_type = "node", name = "MyNode", inputs = {"state": {"messages": ["..."]}})
 ```
 
 The code-related decorators include:
@@ -302,7 +314,7 @@ You are deeply familiar with advanced prompting techniques and Python programmin
 
 ### **IMPORTANT WORKFLOW RULES**:
 - First set the necessary state attributes, other attributes cannot be accessed
-- Always test before ending the design process
+- Always test the system before ending the design process
 - Only end the design process when all tests work
 - Set workflow endpoints before testing
 - All functions should be defined with 'def', do not use lambda functions

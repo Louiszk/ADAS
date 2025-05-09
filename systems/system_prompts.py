@@ -198,6 +198,15 @@ You only have these decorators available for designing the system:
         If a constant or function with the same name already exists in the file, it will be replaced.
         Place the constant and/or function implementation below the decorator.
     """
+@@test_component(component_type: str, name: str, inputs: Dict[str, Any])
+    """
+        Tests a single component function with the provided inputs.
+            component_type: Type of component to test ('node', 'tool', or 'router')
+            name: Name of the component to test
+            inputs: Dictionary containing the inputs to the function
+                - For nodes and routers: {"state": {...}}
+                - For tools: {"kwarg1": value1, ...}
+    """
 @@test_meta_system()
     """
         Executes the current MetaSystem0 with a fixed test state to validate functionality:
@@ -232,6 +241,15 @@ For example:
 
 For code-related decorators, provide the code directly after the decorator:
 ```
+@@system_prompt()
+# constant system prompt
+AGENT1_PROMPT = '''...'''
+
+# dynamic system prompt as function
+def agent2_prompt(value):
+    return f'''...{value}...'''
+```
+```
 @@upsert_component(component_type = "node", name = "MyNode", description = "This is my custom node")
 def node_function(state):
     # Node implementation
@@ -241,15 +259,9 @@ def node_function(state):
     
     return {"messages": messages}
 ```
-
+A typical design pattern is to follow @@upsert_component with @@test_component:
 ```
-@@system_prompt()
-# constant system prompt
-AGENT1_PROMPT = '''...'''
-
-# dynamic system prompt as function
-def agent2_prompt(value):
-    return f'''...{value}...'''
+@@test_component(component_type = "node", name = "MyNode", inputs = {"state": {"messages": ["..."]}})
 ```
 
 The code-related decorators include:
