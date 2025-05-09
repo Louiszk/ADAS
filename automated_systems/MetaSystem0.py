@@ -451,7 +451,12 @@ def build_system():
         if human_message:
             updated_messages.append(human_message)
         else:
-            updated_messages.append(HumanMessage(content="You made no valid function calls. Remember to use the @@decorator_name() syntax."))
+            updated_messages.append(HumanMessage(content="\n".join([
+                "You executed no decorators.",
+                "Remember to structure your output like this:" ,
+                "## Current System Analysis\n## Reasoning\n## Actions",
+                "Use this syntax to execute the necessary decorators:\n```\n@@decorator_name()\n```"
+                ])))
         if iteration == 50:
             updated_messages.append(HumanMessage(content="You have reached 50 of 60 iterations. Try to finish during the next iterations, run a successful test and end the design."))
     
