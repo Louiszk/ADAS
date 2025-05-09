@@ -1,7 +1,55 @@
 import re
 import ast
 import textwrap
+import collections
+import inspect
 from langgraph.graph import START, END
+
+class ReturnValueExtractor(ast.NodeVisitor):
+    """AST visitor that extracts string literals and END constants from return statements."""
+    def __init__(self):
+        self.returned_values = set()
+
+    def visit_Return(self, node):
+        if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+            self.returned_values.add(node.value.value)
+        elif isinstance(node.value, ast.Name) and node.value.id == "END":
+            self.returned_values.add(END)
+
+def _extract_top_level_names(ast_module: ast.Module) -> set[str]:
+    names = set()
+    for node in ast_module.body:
+        if isinstance(node, ast.FunctionDef):
+            names.add(node.name)
+        elif isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    names.add(target.id)
+        elif isinstance(node, ast.AnnAssign):
+            if isinstance(node.target, ast.Name):
+                names.add(node.target.id)
+    return names
+
+class RemoveDefinitionsTransformer(ast.NodeTransformer):
+    def __init__(self, names_to_remove: set[str]):
+        self.names_to_remove = names_to_remove
+        super().__init__()
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST | None:
+        if node.name in self.names_to_remove:
+            return None
+        return self.generic_visit(node)
+
+    def visit_Assign(self, node: ast.Assign) -> ast.AST | None:
+        for target in node.targets:
+            if isinstance(target, ast.Name) and target.id in self.names_to_remove:
+                return None
+        return self.generic_visit(node)
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> ast.AST | None:
+        if isinstance(node.target, ast.Name) and node.target.id in self.names_to_remove:
+            return None
+        return self.generic_visit(node)
 
 class VirtualAgenticSystem:
     """
@@ -46,10 +94,14 @@ class VirtualAgenticSystem:
             self.imports.append(import_statement)
 
     def create_node(self, name, description, func, source_code=None):
+        if name in ["START", "__start__", START, "END", "__end__", END]:
+            raise ValueError(f"START and END are reserved names for the endpoints of the graph.")
         if func.__doc__ is None or func.__doc__.strip() == "":
             func.__doc__ = description
         if source_code:
             func._source_code = source_code
+        else:
+            func._source_code = inspect.getsource(func)
             
         self.nodes[name] = description
         self.node_functions[name] = func
@@ -62,11 +114,42 @@ class VirtualAgenticSystem:
             raise ValueError("Tool function must contain a docstring.")
         if source_code:
             func._source_code = source_code
+        else:
+            func._source_code = inspect.getsource(func)
             
         self.tools[name] = description
         self.tool_functions[name] = func
 
         return True
+    
+    def _infer_path_map(self, function_code: str) -> dict:
+        """Infer possible return values from conditional edge function using AST parsing."""
+        try:
+            dedented_code = textwrap.dedent(function_code)
+            tree = ast.parse(dedented_code)
+            
+            # Get function node if within a module
+            func_node = tree
+            if isinstance(tree, ast.Module) and tree.body and isinstance(tree.body[0], ast.FunctionDef):
+                func_node = tree.body[0]
+
+            # Extract return values
+            extractor = ReturnValueExtractor()
+            extractor.visit(func_node)
+            
+            # Build path map
+            path_map = {}
+            for val in extractor.returned_values:
+                if val == END:
+                    path_map["END"] = END
+                elif isinstance(val, str):
+                    path_map[val] = val
+            
+            return path_map
+        except SyntaxError:
+            return {}
+        except Exception:
+            return {}
 
     def create_edge(self, source, target):
         """Create a standard edge between nodes."""
@@ -75,46 +158,54 @@ class VirtualAgenticSystem:
         if target in ["END", "__end__"]:
             target = END
             
-        if source not in self.nodes and source != START:
+        # Validate source and target nodes
+        if source != START and source not in self.nodes:
             raise ValueError(f"Invalid source node: '{source}' does not exist")
             
-        if target not in self.nodes and target != END:
+        if target != END and target not in self.nodes:
             raise ValueError(f"Invalid target node: '{target}' does not exist")
         
+        # Check for existing standard edge from source
         if any(edge_source == source for edge_source, _ in self.edges):
-            raise ValueError(f"Source node '{source}' already has an outgoing edge. Parallel processing is disabled.")
+            raise ValueError(f"Source node '{source}' already has an outgoing standard edge.")
         
+        # Check for conflicting conditional edge
+        if source in self.conditional_edges:
+            raise ValueError(f"Source node '{source}' is already a conditional edge source.")
+
         self.edges.append((source, target))
         return True
 
     def create_conditional_edge(self, source, condition, condition_code=None, path_map=None):
         """Create a conditional edge with a router function."""
-        if source in ["START" "__start__", START, "END", "__end__", END]:
+        if source in ["START", "__start__", START, "END", "__end__", END]:
             raise ValueError(f"Invalid source node: Routers from endpoints are not allowed.")
         if source not in self.nodes:
             raise ValueError(f"Invalid source node: '{source}' does not exist")
         
+        # Check for conflicting standard edge
+        if any(edge_source == source for edge_source, _ in self.edges):
+            raise ValueError(f"Source node '{source}' already has a standard outgoing edge.")
+
+        # Get or set condition code
         if condition_code:
             condition._source_code = condition_code
+        else:
+            condition._source_code = inspect.getsource(condition)
         
         edge_info = {"condition": condition}
         
-        # if path_map is None:
-        #     path_map = self._auto_path_map(condition_code)
-        
-        # for target in path_map.values():
-        #     if target in ["END", "__end__"]:
-        #         target = END
-        #     if target not in self.nodes and target != END:
-        #         raise ValueError(f"Invalid target node in path_map: '{target}' does not exist")
-        
-        if path_map:
-            edge_info["path_map"] = path_map.copy()
+        # Get path map
+        inferred_path_map = self._infer_path_map(condition._source_code)
+        final_path_map = path_map if path_map is not None else inferred_path_map
+
+        # Save path map if available
+        if final_path_map:
+            edge_info["path_map"] = final_path_map.copy()
         
         self.conditional_edges[source] = edge_info
-        
         return True
-
+    
     def delete_node(self, name):
         """Delete a node and all associated edges."""
         if name in ["START" "__start__", START, "END", "__end__", END]:
@@ -229,50 +320,114 @@ class VirtualAgenticSystem:
 
         return True
 
-    def _auto_path_map(self, function_code):
-        string_pattern = r"['\"]([^'\"]*)['\"]"
-        potential_nodes = set(re.findall(string_pattern, function_code))
-    
-        auto_path_map = {}
-        for node_name in potential_nodes:
-            if node_name in self.nodes:
-                auto_path_map[node_name] = node_name
-        if "END" in function_code:
-            auto_path_map["END"] = END
-    
-        return auto_path_map
-    
-def _extract_top_level_names(ast_module: ast.Module) -> set[str]:
-    names = set()
-    for node in ast_module.body:
-        if isinstance(node, ast.FunctionDef):
-            names.add(node.name)
-        elif isinstance(node, ast.Assign):
-            for target in node.targets:
-                if isinstance(target, ast.Name):
-                    names.add(target.id)
-        elif isinstance(node, ast.AnnAssign):
-            if isinstance(node.target, ast.Name):
-                names.add(node.target.id)
-    return names
+    def validate_graph(self):
+        """Validate graph structure and return list of errors."""
+        errors = []
 
-class RemoveDefinitionsTransformer(ast.NodeTransformer):
-    def __init__(self, names_to_remove: set[str]):
-        self.names_to_remove = names_to_remove
-        super().__init__()
+        # Get all defined nodes
+        all_defined_nodes = set(self.nodes.keys())
+        
+        # Check edges for invalid connections
+        for s, t in self.edges:
+            if s != START and s not in all_defined_nodes:
+                errors.append(f"Edge source '{s}' in ('{s}', '{t}') is not a defined node and not START.")
+            if t != END and t not in all_defined_nodes:
+                errors.append(f"Edge target '{t}' in ('{s}', '{t}') is not a defined node and not END.")
+            if t == START: 
+                errors.append(f"Edge ('{s}', '{t}') targets START, which is invalid.")
+            if s == END: 
+                errors.append(f"Edge ('{s}', '{t}') originates from END, which is invalid.")
 
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST | None:
-        if node.name in self.names_to_remove:
-            return None
-        return self.generic_visit(node)
+        # Check conditional edges for invalid configurations
+        for s, edge_info in self.conditional_edges.items():
+            if s not in all_defined_nodes:
+                errors.append(f"Conditional edge source '{s}' is not a defined node.")
+            
+            path_map = edge_info.get("path_map", {})
+            if not path_map:
+                errors.append(f"Conditional edge source '{s}' has no paths defined in its path_map.")
+            
+            for path_key, path_target in path_map.items():
+                if path_target != END and path_target not in all_defined_nodes:
+                    errors.append(f"Conditional edge target '{path_target}' (for key '{path_key}' from '{s}') is not a defined node.")
 
-    def visit_Assign(self, node: ast.Assign) -> ast.AST | None:
-        for target in node.targets:
-            if isinstance(target, ast.Name) and target.id in self.names_to_remove:
-                return None
-        return self.generic_visit(node)
+        # Check reachability from START
+        reachable_nodes = set()
+        q = collections.deque()
+        
+        # Verify START has outgoing edges
+        start_has_outgoing = any(s == START for s, _ in self.edges)
+        if not start_has_outgoing and all_defined_nodes:
+            errors.append("No entry point: START has no outgoing edges.")
+        
+        # Perform BFS from START
+        if start_has_outgoing or not all_defined_nodes:
+            q.append(START)
+            reachable_nodes.add(START)
 
-    def visit_AnnAssign(self, node: ast.AnnAssign) -> ast.AST | None:
-        if isinstance(node.target, ast.Name) and node.target.id in self.names_to_remove:
-            return None
-        return self.generic_visit(node)
+            while q:
+                curr = q.popleft()
+                # Follow standard edges
+                for s_edge, t_edge in self.edges:
+                    if s_edge == curr and t_edge not in reachable_nodes:
+                        reachable_nodes.add(t_edge)
+                        if t_edge != END: 
+                            q.append(t_edge)
+                
+                # Follow conditional edges
+                if curr in self.conditional_edges:
+                    path_map = self.conditional_edges[curr].get("path_map", {})
+                    for target_node in path_map.values():
+                        if target_node not in reachable_nodes:
+                            reachable_nodes.add(target_node)
+                            if target_node != END: 
+                                q.append(target_node)
+            
+            # Check for unreachable nodes
+            for node_name in all_defined_nodes:
+                if node_name not in reachable_nodes:
+                    errors.append(f"Node '{node_name}' is unreachable from START.")
+            
+            # Check if END is reachable
+            if all_defined_nodes and END not in reachable_nodes:
+                errors.append("END node is unreachable from START.")
+
+        # Check if all nodes can reach END
+        if END in reachable_nodes:
+            can_reach_end = {END}
+            q_rev = collections.deque([END])
+            
+            while q_rev:
+                curr_target = q_rev.popleft()
+                
+                # Find nodes that can reach current target via standard edges
+                for s_edge, t_edge in self.edges:
+                    if (t_edge == curr_target and s_edge in reachable_nodes 
+                            and s_edge not in can_reach_end):
+                        can_reach_end.add(s_edge)
+                        if s_edge != START: 
+                            q_rev.append(s_edge)
+                
+                # Find nodes that can reach current target via conditional edges
+                for cond_s, edge_info in self.conditional_edges.items():
+                    if (cond_s in reachable_nodes and cond_s not in can_reach_end):
+                        path_map = edge_info.get("path_map", {})
+                        if any(path_val == curr_target for path_val in path_map.values()):
+                            can_reach_end.add(cond_s)
+                            q_rev.append(cond_s)
+            
+            # Find dead-end nodes
+            for node_name in all_defined_nodes:
+                if node_name in reachable_nodes and node_name not in can_reach_end:
+                    errors.append(f"Node '{node_name}' is reachable from START but cannot reach END (forms a dead-end path).")
+
+        # Check for explicit dead ends (nodes with no outgoing edges)
+        for node_name in all_defined_nodes:
+            if node_name in reachable_nodes and node_name != END:
+                has_outgoing = (any(s_edge == node_name for s_edge, _ in self.edges) or 
+                               node_name in self.conditional_edges)
+                               
+                if not has_outgoing:
+                    errors.append(f"Node '{node_name}' has no outgoing edges.")
+
+        return sorted(list(set(errors)))

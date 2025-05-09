@@ -103,7 +103,7 @@ def main():
                     print("Design completed.")
                     metrics["status"] = "completed"
             
-            time.sleep(4)
+            time.sleep(2)
 
         metrics["status"] = "completed"
        

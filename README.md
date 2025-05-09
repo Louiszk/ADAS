@@ -1,6 +1,6 @@
 # Automated Design of Agentic Systems
 
-Third version with multiple tools to design the system
+Enable higher order ADAS
 
 ## Quick Setup
 

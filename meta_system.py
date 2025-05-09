@@ -6,7 +6,8 @@ import inspect
 from tqdm import tqdm
 import subprocess
 import io
-import json
+import time
+import traceback
 import contextlib
 from langgraph.graph import START, END
 from typing import Dict, List, Any, Optional, Union
@@ -14,7 +15,7 @@ from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, AI
 from agentic_system.large_language_model import LargeLanguageModel
 from agentic_system.virtual_agentic_system import VirtualAgenticSystem
 from agentic_system.materialize import materialize_system
-from agentic_system.utils import get_filtered_packages, clean_messages
+from agentic_system.utils import get_filtered_packages, clean_messages, get_metrics
 from systems.system_prompts import *
 
 def create_meta_system():
@@ -32,9 +33,11 @@ def create_meta_system():
     # Add imports
     imports = [
         "from agentic_system.materialize import materialize_system",
-        "from agentic_system.utils import get_filtered_packages, clean_messages",
+        "from agentic_system.utils import get_filtered_packages, clean_messages, get_metrics",
         "from tqdm import tqdm",
         "import dill as pickle",
+        "import traceback",
+        "import time",
         "import re",
         "import io",
         "import contextlib",
@@ -56,7 +59,7 @@ def create_meta_system():
         """
 
         exclude_packages = [
-            "datasets", "docker", "grpcio-status", "langchain-google-genai", "langchain-openai", "wheel",
+            "datasets", "docker", "grpcio-status", "langchain-openai", "wheel",
             "llm-sandbox", "pip", "dill", "podman", "python-dotenv", "setuptools"
             ]
         # Validate package name to prevent command injection
@@ -64,7 +67,7 @@ def create_meta_system():
     
         if not re.match(valid_pattern, package_name):
             return f"!!Error: Invalid package name format. Package name '{package_name}' contains invalid characters."
-        if any((ep in package_name for ep in exclude_packages + ["langgraph", "langchain-core"])):
+        if any((ep in package_name for ep in exclude_packages + ["langgraph", "langchain-google-genai", "langchain-core"])):
             return f"{package_name} is already installed."
     
         try:
@@ -99,19 +102,26 @@ def create_meta_system():
         """
     
         try:
-            # Basic validation for each statement
-            for stmt in import_statements:
-                if not isinstance(stmt, str) or not (stmt.startswith("import ") or stmt.startswith("from ")):
-                    return f"!!Error: Invalid import statement format: '{stmt}'. Must start with 'import' or 'from'."
-    
             # Always keep the mandatory base imports
             base_imports = [
                 "from agentic_system.large_language_model import LargeLanguageModel",
                 "from typing import Dict, List, Any, Callable, Optional, Union, TypeVar, Generic, Tuple, Set, TypedDict",
-                "from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage",
+                "from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage, trim_messages",
                 "from langgraph.graph import StateGraph, START, END",
                 "from langchain_core.tools import tool",
-                "import os"
+                "from agentic_system.utils import get_filtered_packages, clean_messages, get_metrics",
+                "from agentic_system.virtual_agentic_system import VirtualAgenticSystem",
+                "from agentic_system.materialize import materialize_system",
+                "target_agentic_system = VirtualAgenticSystem('TargetSystem')",
+                "import dill as pickle",
+                "import traceback",
+                "import time",
+                "import os",
+                "import re",
+                "import io",
+                "import contextlib",
+                "import sys",
+                "import subprocess"
             ]
             # Use a set to avoid duplicates and preserve order for non-base imports
             final_imports = base_imports + sorted(list(set(stmt.strip() for stmt in import_statements if stmt.strip() not in base_imports)))
@@ -146,34 +156,56 @@ def create_meta_system():
         set_state_attributes
     )
 
-    # AddComponent tool
-    def add_component(component_type: str, name: str, description: str, function_code: str = None) -> str:
+    def upsert_component(component_type: str, name: str, function_code: str, description: Optional[str] = None) -> str:
         """
-            Creates a component in the target system.
-                component_type: Type of component to create ('node', 'tool', or 'router')
+            Creates or updates a component in the target system.
+                component_type: Type of the component ('node', 'tool', or 'router')
                 name: Name of the component
-                description: Description of the component
-                function_code: Python code defining the component's function (required for all component types)
+                function_code: Python code defining the component's function
+                description: Description of the component (required for new components)
         """
         try:
             if component_type.lower() not in ["node", "tool", "router"]:
                 return f"!!Error: Invalid component type '{component_type}'. Must be 'node', 'tool', or 'router'."
             
             if not function_code:
-                return f"!!Error: function_code is required for all component types"
+                return f"!!Error: You must provide the function implementation below the decorator, not as argument."
                 
             # Get the function implementation from the code
             func = target_system.get_function(function_code)
             if isinstance(func, str) and func.startswith("!!Error"):
                 return func  # Return the error
                 
+            # Check if component exists
+            component_exists = False
+            if component_type.lower() == "node":
+                component_exists = name in target_system.nodes
+            elif component_type.lower() == "tool":
+                component_exists = name in target_system.tools
+            elif component_type.lower() == "router":
+                component_exists = name in target_system.conditional_edges
+            
+            # If new component but no description provided
+            if not component_exists and not description:
+                return f"!!Error: Description required when creating a new {component_type}"
+                
+            # Use existing description if updating without new description
+            if component_exists and not description:
+                if component_type.lower() == "node" and name in target_system.nodes:
+                    description = target_system.nodes[name].get("description", "")
+                elif component_type.lower() == "tool" and name in target_system.tools:
+                    description = target_system.tools[name].get("description", "")
+                
+            # Create or update the component
+            action = "updated" if component_exists else "created"
+            
             if component_type.lower() == "node":
                 target_system.create_node(name, description, func, function_code)
-                return f"Node '{name}' created successfully"
+                return f"Node '{name}' {action} successfully"
                 
             elif component_type.lower() == "tool":
                 target_system.create_tool(name, description, func, function_code)
-                return f"Tool '{name}' created successfully"
+                return f"Tool '{name}' {action} successfully"
                 
             elif component_type.lower() == "router":
                 target_system.create_conditional_edge(
@@ -182,67 +214,15 @@ def create_meta_system():
                     condition_code=function_code
                 )
                 
-                return f"Conditional edge from '{name}' added successfully"
+                return f"Conditional edge from '{name}' {action} successfully"
                 
         except Exception as e:
-            return f"!!Error creating {component_type}: {repr(e)}"
-    
+            return f"!!Error with {component_type}: {repr(e)}"
+        
     meta_system.create_tool(
-        "AddComponent",
-        "Adds a component (node, tool, or router) to the target system",
-        add_component
-    )
-
-    # EditComponent tool
-    def edit_component(component_type: str, name: str, new_function_code: str, new_description: Optional[str] = None) -> str:
-        """
-            Modifies an existing component's implementation.
-                component_type: Type of component to edit ('node', 'tool', or 'router')
-                name: Name of the component to edit
-                new_function_code: New Python code for the component's function
-                new_description: Optional new description for the component
-        """
-        try:
-            if component_type.lower() not in ["node", "tool", "router"]:
-                return f"!!Error: Invalid component type '{component_type}'. Must be 'node', 'tool', or 'router'."
-                
-            new_function = target_system.get_function(new_function_code)
-            if isinstance(new_function, str) and new_function.startswith("Error"):
-                return new_function  # Return the error
-                
-            if component_type.lower() == "node":
-                if name not in target_system.nodes:
-                    return f"!!Error: Node '{name}' not found"
-                
-                target_system.create_node(name, new_description, new_function, new_function_code)
-                return f"Node '{name}' updated successfully"
-                
-            elif component_type.lower() == "tool":
-                if name not in target_system.tools:
-                    return f"!!Error: Tool '{name}' not found"
-                
-                target_system.create_tool(name, new_description, new_function, new_function_code)
-                return f"Tool '{name}' updated successfully"
-                
-            elif component_type.lower() == "router":
-                if name not in target_system.conditional_edges:
-                    return f"!!Error: Router for node '{name}' not found"
-                    
-                target_system.create_conditional_edge(
-                    source=name,
-                    condition=new_function,
-                    condition_code=new_function_code
-                )
-                
-                return f"Router for node '{name}' updated successfully"
-                
-        except Exception as e:
-            return f"!!Error editing {component_type}: {repr(e)}"
-    
-    meta_system.create_tool(
-        "EditComponent",
-        "Edits a component's implementation",
-        edit_component
+        "UpsertComponent",
+        "Creates or updates a component",
+        upsert_component
     )
 
     # DeleteComponent tool
@@ -317,59 +297,97 @@ def create_meta_system():
     )
 
     # TestSystem tool
-    def test_system(state: Dict[str, Any]) -> str:
+    def test_meta_system(state: Dict[str, Any]) -> str:
         """
-            Executes the current system with a test input state to validate functionality.
-                state: A python dictionary with state attributes e.g. {"messages": ["Test Input"], "attr2": [3, 5]}
+            Executes the current system with a simple test input state to validate functionality.
         """
-        all_outputs = []
+        final_state = {}
+        raw_outputs = []
         error_message = ""
+        task = None
         stdout_capture = io.StringIO()
-        
+        stderr_capture = io.StringIO()
+        start_time = time.time()
+    
         try:
+            # Validate graph structure before execution
+            validation_errors = target_system.validate_graph()
+            if validation_errors:
+                return "!!Error: Graph validation failed:\n" + "\n".join(validation_errors)
+        
+            if state["messages"][0] and state["messages"][0].content:
+                task = state["messages"][0].content
+                state["messages"][0].content += "\nThe system must be completed in no more than 16 iterations."
+                
             source_code, _ = materialize_system(target_system, output_dir=None)
             namespace = {}
-            
-            # Capture stdout during execution
-            with contextlib.redirect_stdout(stdout_capture):
+        
+            with contextlib.redirect_stdout(stdout_capture), contextlib.redirect_stderr(stderr_capture):
                 exec(source_code, namespace, namespace)
-
+                
                 if 'build_system' not in namespace:
                     raise Exception("Could not find build_system function in generated code")
-
+                    
                 target_workflow, _ = namespace['build_system']()
-                pbar = tqdm(desc="Testing the System")
-
+                pbar = tqdm(desc="Testing the MetaSystem")
+                
                 for output in target_workflow.stream(state, config={"recursion_limit": 20}):
+                    raw_outputs.append(output.copy())
                     output["messages"] = clean_messages(output)
-                    all_outputs.append(output)
+                    final_state = output
                     pbar.update(1)
-            
+        
             pbar.close()
-
+            
         except Exception as e:
-            error_message = f"\n\n !!Error while testing the system:\n{repr(e)}"
-
-        # Always capture stdout after try block
-        captured_output = stdout_capture.getvalue()
+            error_message = f"\n\n !!Error while executing the MetaSystem:"
+            if "GraphRecursionError" in repr(e):
+                error_message += "The MetaSystem was unable to end the design process within the 20 iterations limit."
+            else:
+                error_message += f"\n{traceback.format_exc(limit=1, chain=False)}"
+                
+        # Calculate metrics
+        end_time = time.time()
+        duration = end_time - start_time
+        metrics = get_metrics(raw_outputs, duration)
         
-        result = "\n".join([f"State {i}: " + str(out) for i, out in enumerate(all_outputs)]) if all_outputs else {}
+        # Format output
+        captured_output = ""
+        if stdout := stdout_capture.getvalue():
+            captured_output += f"\n\n<STDOUT>\n{stdout}\n</STDOUT>"
+        if stderr := stderr_capture.getvalue():
+            captured_output += f"\n<STDERR>\n{stderr}\n</STDERR>"
         
-        # Add captured stdout to the result
-        test_result = f"Test completed.\n <SystemStates>\n{result}\n</SystemStates>"
-        std_out = ""
-        if captured_output:
-            std_out = f"\n\n<Stdout>\n{captured_output}\n</Stdout>"
-            test_result += std_out
-        if error_message:
-            return error_message + std_out
-        else:
-            return test_result
+        # Format metrics
+        metrics_str = "\n\n<Metrics>\n"
+        metrics_str += f"Iterations: {metrics['total_iterations']}\n"
+        metrics_str += f"Duration: {metrics['duration_seconds']} seconds\n"
+        metrics_str += f"LLM Calls: {metrics['llm_calls']}\n"
+        metrics_str += f"Tokens: {metrics['token_usage']['total_tokens']} "
+        metrics_str += f"(Input: {metrics['token_usage']['input_tokens']}, "
+        metrics_str += f"Output: {metrics['token_usage']['output_tokens']})\n"
+        metrics_str += "</Metrics>"
+    
+        result = str(final_state)
+    
+        test_result = f"MetaSystem0 Test completed.\n <FinalState>\n{result}\n</FinalState>"
+        test_result += metrics_str
+        test_result += captured_output
+        
+        reminder = "\n\nAnalyze the results of how MetaSystem0 designed a TargetSystem, and plan and act accordingly."
+        reminder += "\n\nIMPORTANT:\nYou cannot and should not try to fix the TargetSystem designed during this test. You can only make changes to the MetaSystem0."
+        reminder += f"\nIgnore these instructions you gave the MetaSystem0: \"{task if task else state}\"."
+        reminder += "\nRemember that your task is to optimize MetaSystem0 for any general task, not just the one you gave it in this test."
+        reminder += "\nIf everything works properly with different test cases, or if you have reached the iteration limit, end the design."
+        reminder += "\nOtherwise, identify the ROOT CAUSES of the problems and resolve them."
+        reminder += "\nDo not execute @@test_meta_system again until you have made the necessary fixes to MetaSystem0."
+        
+        return test_result + error_message + reminder
     
     meta_system.create_tool(
-        "TestSystem",
-        "Tests the target system with a given state",
-        test_system
+        "TestMetaSystem",
+        "Tests the meta system with a given state",
+        test_meta_system
     )
 
     # DeleteEdge tool
@@ -433,10 +451,11 @@ def create_meta_system():
         full_messages = [SystemMessage(content=meta_thinker)] + messages + [HumanMessage(content=code_message)]
         print("Thinking...")
         response = llm.invoke(full_messages)
+        response.content = "# Roadmap\n\n" + response.content
 
         transition_message = HumanMessage(content= "\n".join([
             "Thank you for the detailed plan. Please implement this system design step by step.",
-            "Start by setting up the state attributes, imports and installing the necessary packages."
+            "Never deviate from the plan. This plan is now your road map."
             ]))
         updated_messages = messages + [response, transition_message] 
 
@@ -455,7 +474,7 @@ def create_meta_system():
         llm = LargeLanguageModel(temperature=0.2, wrapper="google", model_name="gemini-2.0-flash")
         llm.bind_tools(list(tools.values()), function_call_type="decorator")
 
-        context_length = 8*2 # even
+        context_length = 16
         messages = state.get("messages", [])
         iteration = len([msg for msg in messages if isinstance(msg, AIMessage)])
         initial_messages, current_messages = messages[:3], messages[3:]
@@ -471,14 +490,15 @@ def create_meta_system():
             print(f"Error during message trimming: {e}")
 
         code, prompt_code = materialize_system(target_system, output_dir=None)
-        code_message = "---(Iteration {iteration}) Current Code:\n" + code
-        code_message += ("\n---System Prompts File:\n" + prompt_code) if prompt_code else ""
+        code_message = f"---(Iteration {iteration}) Current Code:\n" + code
+        code_message += ("\n---System Prompts File:\n" + prompts_info + prompt_code) if prompt_code else ""
     
         full_messages = [SystemMessage(content=meta_agent)] + initial_messages + trimmed_messages + [HumanMessage(content=code_message)]
+        print([getattr(last_msg, 'type', 'Unknown') for last_msg in full_messages])
         response = llm.invoke(full_messages)
 
         if not hasattr(response, 'content') or not response.content:
-            response.content = "I will call the necessary tools."
+            response.content = "I will execute the necessary decorators."
         
         human_message, tool_results = llm.execute_tool_calls(response.content, function_call_type="decorator")
 
@@ -487,19 +507,21 @@ def create_meta_system():
             updated_messages.append(human_message)
         else:
             updated_messages.append(HumanMessage(content="You made no valid function calls. Remember to use the @@decorator_name() syntax."))
+        if iteration == 50:
+            updated_messages.append(HumanMessage(content="You have reached 50 of 60 iterations. Try to finish during the next iterations, run a successful test and end the design."))
 
             
-        # Ending the design if the last test ran without errors (this does not check accuracy)
+        # Ending the design if the last test ran without errors
         design_completed = False
         if tool_results and 'EndDesign' in tool_results and "Ending the design process" in str(tool_results['EndDesign']):
             test_passed_recently = False
             search_start_index = max(0, len(messages) - 4)
             for msg in reversed(updated_messages[search_start_index:]):
                 if isinstance(msg, HumanMessage) and hasattr(msg, 'content'):
-                    if "Test completed." in msg.content and not "Error while testing the system" in msg.content:
+                    if "Test completed." in msg.content and not "!!Error" in msg.content:
                         test_passed_recently = True
                         break
-                    elif "Error while testing the system" in msg.content:
+                    elif "!!Error" in msg.content:
                         test_passed_recently = False
                         break
 
@@ -509,7 +531,7 @@ def create_meta_system():
                 if human_message and "Ending the design process..." in human_message.content:
                     human_message.content = human_message.content.replace(
                         "Ending the design process...",
-                        "Error: Cannot finalize the design. Please run successful tests using @@test_system first."
+                        "Error: Cannot finalize the design. Please run successful tests using @@test_meta_system first."
                     )
     
         new_state = {"messages": updated_messages, "design_completed": design_completed}

@@ -1,12 +1,3 @@
-prompts_info = """
-# These decorators are parsed from the response with llm.execute_tool_calls(response.content, function_call_type="decorator")
-# For the upsert_component and system_prompt decorators, the 'function_code'/'system_prompt_code' is automatically grabbed from under the decorator.
-# This format allows for better function calls because the agent does not have to double escape special characters in the code.
-
-# These three helper prompts (agentic_system_prompt, function_signatures, decorator_tool_prompt) are an important addition to the agent prompts.
-# They provide more context for better understanding of the task and how to interact with and build the system.
-"""
-
 agentic_system_prompt = '''
 # Agentic System Architecture
 An agentic system consists of a directed graph with nodes and edges where:
@@ -40,10 +31,11 @@ A node is simply a Python function that processes state. There are two common pa
 ```python
 # Example
 def agent_node(state):
-    llm = LargeLanguageModel(temperature=0.4, wrapper="google", model_name="gemini-2.0-flash") # only use this model!
+    llm = LargeLanguageModel(temperature=0.4) # Use this default model (wrapper around ChatOpenAI)
     system_prompt = SYSTEM_PROMPT_AGENT1 # constant added to System Prompts section.
     # Optionally bind tools that this agent can use
-    llm.bind_tools([tools["Tool1"], tools["Tool2"]], function_call_type="decorator")
+    # This will automatically instruct the agent based on the tools docstrings
+    llm.bind_tools([tools["Tool1"], tools["Tool2"]])
     
     # get message history, or other crucial information
     messages = state.get("messages", [])
@@ -53,7 +45,7 @@ def agent_node(state):
     response = llm.invoke(full_messages)
 
     # Execute the tool calls from the agent's response
-    tool_messages, tool_results = llm.execute_tool_calls(response.content, function_call_type="decorator")
+    tool_messages, tool_results = llm.execute_tool_calls(response)
     
     # You can now use tool_results programmatically if needed
     # e.g., tool_results["Tool1"] contains the actual return values of Tool1
@@ -148,11 +140,10 @@ You only have these decorators available for designing the system:
         If a constant or function with the same name already exists in the file, it will be replaced.
         Place the constant and/or function implementation below the decorator.
     """
-@@test_meta_system(state: Dict[str, Any])
+@@test_system(state: Dict[str, Any])
     """
-        Executes the current MetaSystem0 with a test input state to validate functionality.
-        The test is always bound to 20 iterations. Use this decorator sparingly.
-            state: A python dictionary with state attributes e.g. {"messages": [HumanMessage("Design a simple system ...")], ...}
+        Executes the current system with a test input state to validate functionality.
+            state: A python dictionary with state attributes e.g. {"messages": ["Test Input"], "attr2": [3, 5]}
     """
 @@end_design()
     """
@@ -166,7 +157,7 @@ Using those decorators is the only way to design the system.
 Do NOT add them to the system you are designing, that is not the intended way, 
 instead always enclose them in triple backticks, or a Python markdown block to execute them directly:
 ```
-@@function_name(kwarg1 = "value1", kwarg2 = "value2")
+@@function_name(arg1 = "value1", arg2 = "value2")
 ```
 
 Write each decorator in a separate block. If there are more than one decorators in a single block, the block will not be executed.
@@ -175,7 +166,7 @@ For example:
 @@pip_install(package_name = "numpy")
 ```
 ```
-@@test_meta_system(state = {"messages": [HumanMessage("Design a simple system ...")]})
+@@test_system(state = {"messages": ["Test Input"], "attr2": [3, 5]})
 ```
 
 For code-related decorators, provide the code directly after the decorator:

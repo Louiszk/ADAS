@@ -65,7 +65,7 @@ def materialize_system(system, output_dir="systems"):
         if output_dir:
             code_lines.append(f"from {output_dir.split('/')[-1]}.{escaped_name}_system_prompts import *")
         else:
-            code_lines.append(f"from agentic_system.{escaped_name}_system_prompts import *")
+            code_lines.append(f"from automated_systems.{escaped_name}_system_prompts import *")
     
     code_lines.extend([
         "",
@@ -209,7 +209,7 @@ def materialize_system(system, output_dir="systems"):
 
         system_prompt_filename = os.path.join(output_dir, f"{escaped_name}_system_prompts.py")
     else:
-        system_prompt_filename = os.path.join("sandbox/workspace/agentic_system", f"{escaped_name}_system_prompts.py")
+        system_prompt_filename = os.path.join("sandbox/workspace/automated_systems", f"{escaped_name}_system_prompts.py")
     if prompt_code:
         with open(system_prompt_filename, "w", encoding='utf-8') as f:
             f.write(prompt_code)
