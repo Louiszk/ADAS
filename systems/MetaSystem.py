@@ -282,7 +282,7 @@ def build_system():
         error_message = ""
         task = None
         stdout_capture = io.StringIO()
-        # stderr_capture = io.StringIO()
+        stderr_capture = io.StringIO()
         start_time = time.time()
     
         try:
@@ -298,7 +298,7 @@ def build_system():
             source_code, _ = materialize_system(target_system, output_dir=None)
             namespace = {}
     
-            with contextlib.redirect_stdout(stdout_capture):
+            with contextlib.redirect_stdout(stdout_capture), contextlib.redirect_stderr(stderr_capture):
                 exec(source_code, namespace, namespace)
     
                 if 'build_system' not in namespace:
@@ -331,8 +331,8 @@ def build_system():
         captured_output = ""
         if stdout := stdout_capture.getvalue():
             captured_output += f"\n\n<STDOUT>\n{stdout}\n</STDOUT>"
-        #if stderr := stderr_capture.getvalue():
-        #    captured_output += f"\n<STDERR>\n{stderr}\n</STDERR>"
+        if stderr := stderr_capture.getvalue():
+            captured_output += f"\n<STDERR>\n{stderr}\n</STDERR>"
     
         # Format metrics
         metrics_str = "\n\n<Metrics>\n"
