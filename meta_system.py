@@ -7,7 +7,7 @@ from tqdm import tqdm
 import subprocess
 import io
 import time
-import json
+import traceback
 import contextlib
 from langgraph.graph import START, END
 from typing import Dict, List, Any, Optional, Union
@@ -36,6 +36,7 @@ def create_meta_system():
         "from agentic_system.utils import get_filtered_packages, clean_messages, get_metrics",
         "from tqdm import tqdm",
         "import dill as pickle",
+        "import traceback",
         "import time",
         "import re",
         "import io",
@@ -112,8 +113,8 @@ def create_meta_system():
                 "from agentic_system.virtual_agentic_system import VirtualAgenticSystem",
                 "from agentic_system.materialize import materialize_system",
                 "target_agentic_system = VirtualAgenticSystem('TargetSystem')",
-                "from tqdm import tqdm",
                 "import dill as pickle",
+                "import traceback",
                 "import time",
                 "import os",
                 "import re",
@@ -315,8 +316,8 @@ def create_meta_system():
                 return "!!Error: Graph validation failed:\n" + "\n".join(validation_errors)
         
             if state["messages"][0] and state["messages"][0].content:
-                state["messages"][0].content += "\nThe system must be completed in no more than 16 iterations."
                 task = state["messages"][0].content
+                state["messages"][0].content += "\nThe system must be completed in no more than 16 iterations."
                 
             source_code, _ = materialize_system(target_system, output_dir=None)
             namespace = {}
@@ -334,7 +335,6 @@ def create_meta_system():
                     raw_outputs.append(output.copy())
                     output["messages"] = clean_messages(output)
                     final_state = output
-                    time.sleep(2)
                     pbar.update(1)
         
             pbar.close()
@@ -344,7 +344,7 @@ def create_meta_system():
             if "GraphRecursionError" in repr(e):
                 error_message += "The MetaSystem was unable to end the design process within the 20 iterations limit."
             else:
-                error_message += f"\n{repr(e)}"
+                error_message += f"\n{traceback.format_exc(limit=1, chain=False)}"
                 
         # Calculate metrics
         end_time = time.time()
@@ -376,9 +376,10 @@ def create_meta_system():
         
         reminder = "\n\nAnalyze the results of how MetaSystem0 designed a TargetSystem, and plan and act accordingly."
         reminder += "\n\nIMPORTANT:\nYou cannot and should not try to fix the TargetSystem designed during this test. You can only make changes to the MetaSystem0."
-        reminder += f"\nIgnore these instructions you gave the MetaSystem0: \"{task if task else state}\". Remember that you task is to optimize the MetaSystem0."
-        reminder += "\nIf everything is working properly with different test cases, end the design."
-        reminder += "Otherwise, identify the ROOT CAUSES of the problems and resolve them."
+        reminder += f"\nIgnore these instructions you gave the MetaSystem0: \"{task if task else state}\"."
+        reminder += "\nRemember that your task is to optimize MetaSystem0 for any general task, not just the one you gave it in this test."
+        reminder += "\nIf everything works properly with different test cases, or if you have reached the iteration limit, end the design."
+        reminder += "\nOtherwise, identify the ROOT CAUSES of the problems and resolve them."
         reminder += "\nDo not execute @@test_meta_system again until you have made the necessary fixes to MetaSystem0."
         
         return test_result + error_message + reminder
@@ -450,7 +451,7 @@ def create_meta_system():
         full_messages = [SystemMessage(content=meta_thinker)] + messages + [HumanMessage(content=code_message)]
         print("Thinking...")
         response = llm.invoke(full_messages)
-        response.content = "InitialPlan:\n\n" + response.content
+        response.content = "# Roadmap\n\n" + response.content
 
         transition_message = HumanMessage(content= "\n".join([
             "Thank you for the detailed plan. Please implement this system design step by step.",
@@ -473,7 +474,7 @@ def create_meta_system():
         llm = LargeLanguageModel(temperature=0.2, wrapper="google", model_name="gemini-2.0-flash")
         llm.bind_tools(list(tools.values()), function_call_type="decorator")
 
-        context_length = 8*2 # even
+        context_length = 16
         messages = state.get("messages", [])
         iteration = len([msg for msg in messages if isinstance(msg, AIMessage)])
         initial_messages, current_messages = messages[:3], messages[3:]
@@ -489,15 +490,15 @@ def create_meta_system():
             print(f"Error during message trimming: {e}")
 
         code, prompt_code = materialize_system(target_system, output_dir=None)
-        code_message = "---(Iteration {iteration}) Current Code:\n" + code
-        code_message += ("\n---System Prompts File:\n" + prompt_code) if prompt_code else ""
+        code_message = f"---(Iteration {iteration}) Current Code:\n" + code
+        code_message += ("\n---System Prompts File:\n" + prompts_info + prompt_code) if prompt_code else ""
     
         full_messages = [SystemMessage(content=meta_agent)] + initial_messages + trimmed_messages + [HumanMessage(content=code_message)]
         print([getattr(last_msg, 'type', 'Unknown') for last_msg in full_messages])
         response = llm.invoke(full_messages)
 
         if not hasattr(response, 'content') or not response.content:
-            response.content = "I will call the necessary tools."
+            response.content = "I will execute the necessary decorators."
         
         human_message, tool_results = llm.execute_tool_calls(response.content, function_call_type="decorator")
 
@@ -507,10 +508,10 @@ def create_meta_system():
         else:
             updated_messages.append(HumanMessage(content="You made no valid function calls. Remember to use the @@decorator_name() syntax."))
         if iteration == 50:
-            updated_messages.append(HumanMessage(content="You have reached 50 iterations. Try to finish during the next iterations, run a successful test and end the design."))
+            updated_messages.append(HumanMessage(content="You have reached 50 of 60 iterations. Try to finish during the next iterations, run a successful test and end the design."))
 
             
-        # Ending the design if the last test ran without errors (this does not check accuracy)
+        # Ending the design if the last test ran without errors
         design_completed = False
         if tool_results and 'EndDesign' in tool_results and "Ending the design process" in str(tool_results['EndDesign']):
             test_passed_recently = False

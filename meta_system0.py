@@ -4,10 +4,9 @@ import sys
 import time
 import dill as pickle
 import inspect
-from tqdm import tqdm
 import subprocess
 import io
-import json
+import traceback
 import contextlib
 from langgraph.graph import START, END
 from typing import Dict, List, Any, Optional, Union
@@ -36,8 +35,8 @@ def create_meta_system():
         "from agentic_system.virtual_agentic_system import VirtualAgenticSystem",
         "from agentic_system.materialize import materialize_system",
         "target_agentic_system = VirtualAgenticSystem('TargetSystem')",
-        "from tqdm import tqdm",
         "import dill as pickle",
+        "import traceback",
         "import time",
         "import re",
         "import io",
@@ -80,6 +79,7 @@ def create_meta_system():
             )
     
             if process.returncode == 0:
+                # get_filtered_packages will execute pip list --not-required
                 target_agentic_system.packages = get_filtered_packages(exclude_packages) + ["langchain-core 0.3.45"]
                 return f"Successfully installed {package_name}"
             else:
@@ -319,18 +319,14 @@ def create_meta_system():
                     raise Exception("Could not find build_system function in generated code")
 
                 target_workflow, _ = namespace['build_system']()
-                pbar = tqdm(desc="Testing the System")
 
                 for output in target_workflow.stream(state, config={"recursion_limit": 20}):
                     raw_outputs.append(output.copy())  # Store raw output for metrics
-                    output["messages"] = clean_messages(output)
+                    output["messages"] = clean_messages(output) # Only get content and tool_calls from messages
                     all_outputs.append(output)
-                    pbar.update(1)
-            
-            pbar.close()
 
         except Exception as e:
-            error_message = f"\n\n !!Error while testing the system:\n{repr(e)}"
+            error_message = f"\n\n !!Error while testing the system:\n{traceback.format_exc(limit=1, chain=False)}"
 
         # Calculate execution time and metrics
         end_time = time.time()
@@ -362,8 +358,8 @@ def create_meta_system():
         test_result += captured_output
         
         reminder = "\n\nAnalyze the results of the TargetSystem, and plan and act accordingly."
-        reminder += "\nIf everything is working properly with different test cases, end the design."
-        reminder += "Otherwise, identify the ROOT CAUSES of the problems and resolve them."
+        reminder += "\nIf everything works properly with different test cases, or if you have reached the iteration limit, end the design."
+        reminder += "\nOtherwise, identify the ROOT CAUSES of the problems and resolve them."
 
         return test_result + error_message + reminder
     
@@ -456,7 +452,7 @@ def create_meta_system():
         llm = LargeLanguageModel(temperature=0.2, wrapper="google", model_name="gemini-2.0-flash")
         llm.bind_tools(list(tools.values()), function_call_type="decorator")
 
-        context_length = 8*2 # even
+        context_length = 16
         messages = state.get("messages", [])
         iteration = len([msg for msg in messages if isinstance(msg, AIMessage)])
         initial_messages, current_messages = messages[:3], messages[3:]
@@ -465,22 +461,23 @@ def create_meta_system():
                 current_messages,
                 max_tokens=context_length,
                 strategy="last",
-                token_counter=len,
+                token_counter=len, # correctly counts messages
                 allow_partial=False
             )
         except Exception as e:
             print(f"Error during message trimming: {e}")
 
         code, prompt_code = materialize_system(target_agentic_system, output_dir=None)
-        code_message = "---(Iteration {iteration}) Current Code:\n" + code
+        code_message = f"---(Iteration {iteration}) Current Code:\n" + code
         code_message += ("\n---System Prompts File:\n" + prompt_code) if prompt_code else ""
     
         full_messages = [SystemMessage(content=meta_agent)] + initial_messages + trimmed_messages + [HumanMessage(content=code_message)]
         response = llm.invoke(full_messages)
 
         if not hasattr(response, 'content') or not response.content:
-            response.content = "I will call the necessary tools."
+            response.content = "I will execute the necessary decorators."
         
+        # This will parse the decorators from the response and correctly execute the functions
         human_message, tool_results = llm.execute_tool_calls(response.content, function_call_type="decorator")
 
         updated_messages = messages + [response]
@@ -489,10 +486,10 @@ def create_meta_system():
         else:
             updated_messages.append(HumanMessage(content="You made no valid function calls. Remember to use the @@decorator_name() syntax."))
         if iteration == 50:
-            updated_messages.append(HumanMessage(content="You have reached 50 iterations. Try to finish during the next iterations, run a successful test and end the design."))
+            updated_messages.append(HumanMessage(content="You have reached 50 of 60 iterations. Try to finish during the next iterations, run a successful test and end the design."))
 
             
-        # Ending the design if the last test ran without errors (this does not check accuracy)
+        # Ending the design if the last test ran without errors
         design_completed = False
         if tool_results and 'EndDesign' in tool_results and "Ending the design process" in str(tool_results['EndDesign']):
             test_passed_recently = False

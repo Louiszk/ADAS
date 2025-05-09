@@ -1,9 +1,18 @@
+prompts_info = """
+# These decorators are parsed from the response with llm.execute_tool_calls(response.content, function_call_type="decorator")
+# For the upsert_component and system_prompt decorators, the 'function_code'/'system_prompt_code' is automatically grabbed from under the decorator.
+# This format allows for better function calls because the agent does not have to double escape special characters in the code.
+
+# These three helper prompts (agentic_system_prompt, function_signatures, decorator_tool_prompt) are an important addition to the agent prompts.
+# They provide more context for better understanding of the task and how to interact with and build the system.
+"""
+
 agentic_system_prompt = '''
 # Agentic System Architecture
 An agentic system consists of a directed graph with nodes and edges where:
 - Nodes are processing functions that handle state information
 - Edges define the flow of execution between nodes
-- The system has exactly one designated entry point (START) and one finish point (END).
+- The system has exactly one designated entry point (START or "__start__") and one finish point (END or "__end__").
 - State is passed between nodes and can be modified throughout execution
 
 ## Tools
@@ -208,10 +217,10 @@ This will add a conditional edge from SourceNode to NodeA or NodeB based on some
 
 Use START and END as special node names for setting entry and exit points:
 ```
-@@add_edge(source = START, target = "FirstNode")  # Sets FirstNode as the entry point
+@@add_edge(source = START, target = "FirstNode")  # Sets FirstNode as the entry point "__start__" -> "FirstNode"
 ```
 ```
-@@add_edge(source = "LastNode", target = END)     # Sets LastNode as the finish point
+@@add_edge(source = "LastNode", target = END)     # Sets LastNode as the finish point "LastNode" -> __end__
 ```
 """
 
@@ -308,6 +317,7 @@ Your output **MUST ALWAYS** be structured as follows:
 
 ## Actions
 - Execute the necessary decorators based on your system analysis and reasoning.
+- You can execute multiple decorators, but remember to use one markdown block per decorator.
 - Write precise, error-free code when creating or editing components.
 - Do not make assumptions about the helper code that you cannot verify.
 - Ensure all changes are grounded; the system must function correctly.

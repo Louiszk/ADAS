@@ -94,6 +94,8 @@ class VirtualAgenticSystem:
             self.imports.append(import_statement)
 
     def create_node(self, name, description, func, source_code=None):
+        if name in ["START", "__start__", START, "END", "__end__", END]:
+            raise ValueError(f"START and END are reserved names for the endpoints of the graph.")
         if func.__doc__ is None or func.__doc__.strip() == "":
             func.__doc__ = description
         if source_code:
