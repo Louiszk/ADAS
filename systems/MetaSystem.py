@@ -149,11 +149,14 @@ def build_system():
                 description: Description of the component (required for new components)
         """
         try:
+            if "greeting" in name.lower():
+                return "!!Error: DO NOT MODIFY THE 'Greeting System'. Remember that your task is to optimize the MetaSystem0."
+    
             if component_type.lower() not in ["node", "tool", "router"]:
                 return f"!!Error: Invalid component type '{component_type}'. Must be 'node', 'tool', or 'router'."
     
             if not function_code:
-                return f"!!Error: You must provide the function implementation below the decorator, not as argument."
+                return "!!Error: You must provide the function implementation below the decorator, not as argument."
     
             # Get the function implementation from the code
             func = target_system.get_function(function_code)
@@ -330,8 +333,7 @@ def build_system():
         captured_output = ""
         stdout = stdout_capture.getvalue() or ""
         stderr = stderr_capture.getvalue() or ""
-        if stdout or stderr:
-            captured_output = f"\n\n<STDOUT+STDERR>\n{stdout}\n{stderr}\n</STDOUT+STDERR>"
+        captured_output = f"\n\n<STDOUT+STDERR>\n{stdout}\n{stderr}\n</STDOUT+STDERR>"
     
         # Format metrics
         metrics_str = "\n\n<Metrics>\n"
@@ -480,11 +482,9 @@ def build_system():
             search_start_index = max(0, len(messages) - 4)
             for msg in reversed(updated_messages[search_start_index:]):
                 if isinstance(msg, HumanMessage) and hasattr(msg, 'content'):
-                    if "Test completed." in msg.content and not "!!Error" in msg.content:
-                        test_passed_recently = True
-                        break
-                    elif "!!Error" in msg.content:
-                        test_passed_recently = False
+                    if "Test completed." in msg.content:
+                        if not "!!Error" in str(msg.content).split("/STDOUT")[-1]:
+                            test_passed_recently = True
                         break
     
             if test_passed_recently or iteration >= 58:

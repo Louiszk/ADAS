@@ -337,8 +337,7 @@ def create_meta_system():
         captured_output = ""
         stdout = stdout_capture.getvalue() or ""
         stderr = stderr_capture.getvalue() or ""
-        if stdout or stderr:
-            captured_output = f"\n\n<STDOUT+STDERR>\n{stdout}\n{stderr}\n</STDOUT+STDERR>"
+        captured_output = f"\n\n<STDOUT+STDERR>\n{stdout}\n{stderr}\n</STDOUT+STDERR>"
         
         # Format metrics for display
         metrics_str = "\n\n<Metrics>\n"
@@ -503,11 +502,9 @@ def create_meta_system():
             search_start_index = max(0, len(messages) - 4)
             for msg in reversed(updated_messages[search_start_index:]):
                 if isinstance(msg, HumanMessage) and hasattr(msg, 'content'):
-                    if "Test completed." in msg.content and not "!!Error" in msg.content:
-                        test_passed_recently = True
-                        break
-                    elif "!!Error" in msg.content:
-                        test_passed_recently = False
+                    if "Test completed." in msg.content:
+                        if not "!!Error" in msg.content:
+                            test_passed_recently = True
                         break
 
             if test_passed_recently or iteration >= 58:
