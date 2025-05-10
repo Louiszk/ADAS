@@ -1,33 +1,3 @@
-prompts_info = """
-# These decorators are parsed from the response with llm.execute_tool_calls(response.content, function_call_type="decorator")
-# For the upsert_component and system_prompt decorators, the 'function_code'/'system_prompt_code' is automatically grabbed from under the decorator.
-# This format allows for better function calls because the agent does not have to double escape special characters in the code.
-
-# These three helper prompts (agentic_system_prompt, function_signatures, decorator_tool_prompt) are an important addition to the agent prompts.
-# They provide more context for better understanding of the task and how to interact with and build the system.
-"""
-
-test_reminder = f"""
-These logs show MetaSystem0's attempt to design a "Greeting System" based on its fixed internal test.
-If MetaSystem0 consistently designs a good "Greeting System" AND you believe its capabilities are generalized, or if the iteration limit is reached, consider using `@@end_design`.
-Otherwise, your SOLE FOCUS is to IMPROVE MetaSystem0 itself:
-
-**KEY INSTRUCTIONS**
-
-1.  **DO NOT MODIFY THE "Greeting System".** You are *not* fixing the TargetSystem that was just designed (e.g., do NOT try to upsert the `GreetingNode`).
-     Your actions (e.g., `@@upsert_component`) apply *only* to MetaSystem0's components.
-
-2.  **Enhance MetaSystem0's *ABILITY TO DESIGN*.**
-    - If execution threw an exception at some point, identify using the Current Code and traceback why MetaSystem0 failed.
-    - If the "Greeting System" had flaws, identify why MetaSystem0 designed it poorly.
-    - Example: Were there bugs in MetaSystem0's overall code? Were its prompts inadequate and lacking important context?
-    - Your actions should correct *these kinds of flaws within MetaSystem0's own code or prompts*.
-
-3.  **GENERALIZE MetaSystem0's IMPROVEMENTS.** The "Greeting System" is just basic validation. Make MetaSystem0 better at designing *any* system, not just a better Greeting System.
-
-4.  **RETEST MetaSystem0 SPARINGLY.** Only use `@@test_meta_system()` *after* you have made specific, targeted changes to MetaSystem0's components or prompts that you believe will improve its general design capabilities.
-"""
-
 agentic_system_prompt = '''
 # Agentic System Architecture
 An agentic system consists of a directed graph with nodes and edges where:
@@ -38,7 +8,7 @@ An agentic system consists of a directed graph with nodes and edges where:
 
 ## Tools
 Tools are standalone functions, registered with the system, designed to perform specific actions. They can be called by AI agents or invoked within nodes.
- For an AI agent to understand and use a tool effectively, it must be mentioned as available decorator in its system prompt.
+ For an AI agent to understand and use a tool effectively, the tool must have clear type annotations and a comprehensive docstring.
 ```python
 # Example of a tool definition:
 def tool_function(arg1: str, arg2: int, ...) -> List[Any]:
@@ -57,12 +27,12 @@ They can be invoked in two primary ways:
 **By AI Agents (LLM-driven)**:
 When a node uses a LargeLanguageModel, the LLM can decide to use available tools:
 ```python
-# Binding tools to the LLM, specifying decorator-style interaction:
-llm.bind_tools([tools["Tool1"], tools["Tool2"]], function_call_type="decorator")
-# The LLM then generates a response containing the decorator syntax.
+# Binding tools to the LLM
+llm.bind_tools([tools["Tool1"], tools["Tool2"]])
+# The LLM then generates a response containing the tool_calls.
 response = llm.invoke(some_messages)
-# These decorator-based calls are parsed and executed:
-tool_messages, tool_results = llm.execute_tool_calls(response.content, function_call_type="decorator")
+# These tool_calls can be executed:
+tool_messages, tool_results = llm.execute_tool_calls(response)
 ```
 **Programmatically within Node Code**:
 You can also directly invoke a tool's functionality within any node.
@@ -80,10 +50,10 @@ A node is a Python function that processes the system's state. There are two com
 ```python
 # Example of an AI Agent Node:
 def agent_node(state):
-    llm = LargeLanguageModel(temperature=0.4, wrapper="google", model_name="gemini-2.0-flash") # only use this model!
+    llm = LargeLanguageModel(temperature=0.4) # Use this default model (wrapper around ChatOpenAI)
 
     # Optionally bind tools that this agent can execute
-    llm.bind_tools([tools["Tool1"], tools["Tool2"]], function_call_type="decorator")
+    llm.bind_tools([tools["Tool1"], tools["Tool2"]])
     
     # Prepare messages for the LLM, typically including history and system instructions
     messages = state.get("messages", [])
@@ -92,14 +62,14 @@ def agent_node(state):
     # Invoke the LargeLanguageModel with required information
     response = llm.invoke(full_messages)
 
-    # Parse and execute any decorator-style tool calls from the LLM's response content
-    human_message, tool_results = llm.execute_tool_calls(response.content, function_call_type="decorator")
+    # Execute the tool calls from the agent's response
+    tool_messages, tool_results = llm.execute_tool_calls(response)
     
     # You can now use tool_results programmatically if needed
     # e.g., tool_results["Tool1"] contains the actual return values of Tool1
     
-    # Update the system state with the LLM's response and the tool interaction message
-    new_state = {"messages": messages + [response] + [human_message]}
+    # Update the system state with the LLM's response and the tool interaction messages
+    new_state = {"messages": messages + [response] + tool_messages}
     # Add any other state modifications based on tool_results or response.
     
     return new_state
@@ -207,13 +177,10 @@ You only have these decorators available for designing the system:
                 - For nodes and routers: {"state": {...}}
                 - For tools: {"kwarg1": value1, ...}
     """
-@@test_meta_system()
+@@test_system(state: Dict[str, Any])
     """
-        Executes the current MetaSystem0 with a fixed test state to validate functionality:
-            state = {"messages": [HumanMessage(
-                "Design a simple system that greets the user. It should include a 'GreetingNode' using an LLM."
-                "\nThe system must be completed in no more than 16 iterations."
-            )]}
+        Executes the current system with a test input state to validate functionality.
+            state: A python dictionary with state attributes e.g. {"messages": ["Test Input"], "attr2": [3, 5]}
     """
 @@end_design()
     """
@@ -227,7 +194,7 @@ Using those decorators is the only way to design the system.
 Do NOT add them to the system you are designing, that is not the intended way, 
 instead always enclose them in triple backticks, or a Python markdown block to execute them directly:
 ```
-@@function_name(kwarg1 = "value1", kwarg2 = "value2")
+@@function_name(arg1 = "value1", arg2 = "value2")
 ```
 
 Write each decorator in a separate block. If there are more than one decorators in a single block, the block will not be executed.
@@ -236,7 +203,7 @@ For example:
 @@pip_install(package_name = "numpy")
 ```
 ```
-@@test_meta_system()
+@@test_system(state = {"messages": ["Test Input"], "attr2": [3, 5]})
 ```
 
 For code-related decorators, provide the code directly after the decorator:
@@ -347,7 +314,7 @@ You are deeply familiar with advanced prompting techniques and Python programmin
 
 ### **IMPORTANT WORKFLOW RULES**:
 - First set the necessary state attributes, other attributes cannot be accessed
-- Always test before ending the design process
+- Always test the system before ending the design process
 - Only end the design process when all tests work
 - Set workflow endpoints before testing
 - All functions should be defined with 'def', do not use lambda functions
@@ -376,7 +343,7 @@ Your output **MUST ALWAYS** be structured as follows:
 ## Actions
 - Execute the necessary decorators based on your system analysis and reasoning.
 - You can execute multiple decorators, but remember to use one markdown block per decorator.
-- Carefully consider the implications of using these decorators
+- Carefully consider the implications of using these decorators.
 - Write precise, error-free code when creating or editing components.
 - Do not make assumptions about the helper code that you cannot verify.
 - Ensure all changes are grounded; the system must function correctly.
