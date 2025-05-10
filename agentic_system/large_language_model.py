@@ -39,7 +39,7 @@ def parse_decorator_tool_calls(text):
     # Extract code blocks
     code_blocks = find_code_blocks(text)
     if not code_blocks:
-        print("No code blocks found!")
+        print("No markdown blocks found in the agent's response! Unable to parse decorators.")
     
     for block_content in code_blocks:
         lines = block_content.split('\n')
@@ -94,6 +94,7 @@ def parse_decorator_tool_calls(text):
                         
                         tool_calls.append({
                             'name': tool_name,
+                            'decorator_name': decorator_name,
                             'pos_args': pos_args,
                             'kw_args': kw_args
                         })
@@ -116,10 +117,11 @@ def execute_decorator_tool_calls(response, available_tools):
     def add_skipped_calls_message(current_index):
         remaining_calls = len(tool_calls) - current_index - 1
         if remaining_calls > 0:
-            tool_messages.append(f"Note: {remaining_calls} remaining tool call(s) in this response skipped. You can make new tool calls in your next response.")
+            tool_messages.append(f"Note: {remaining_calls} remaining decorator call(s) in this response skipped. You can make new decorator calls in your next response.")
     
     for i, tool_call in enumerate(tool_calls):
         tool_name = tool_call['name']
+        decorator_name = tool_call['decorator_name']
         pos_args = tool_call.get('pos_args', ())
         kw_args = tool_call.get('kw_args', {})
         
@@ -132,21 +134,23 @@ def execute_decorator_tool_calls(response, available_tools):
                 else:
                     result = tool.invoke(kw_args)
                 
-                tool_messages.append(str(result) if result else f"Tool {tool_name} executed successfully.")
+                tool_messages.append(str(result) if result else f"Decorator @@{decorator_name} executed successfully.")
                 tool_results[tool_name] = result
                 
                 if isinstance(result, str) and "!!Error" in result:
                     add_skipped_calls_message(i)
                     break
             except Exception as e:
-                error_message = f"Error executing tool {tool_name}: {repr(e)}"
+                error_message = f"Error executing decorator @@{decorator_name}: {repr(e)}"
                 tool_messages.append(error_message)
                 tool_results[tool_name] = error_message
                 
                 add_skipped_calls_message(i)
                 break
         else:
-            tool_messages.append(f"Tool {tool_name} not found")
+            tool_messages.append(f"Decorator @@{decorator_name} not found.")
+            if decorator_name == "test_system":
+                tool_messages.append(f"Remember that you only have access to the @@test_meta_system decorator.")
             add_skipped_calls_message(i)
             break
 
@@ -207,11 +211,6 @@ def get_model(wrapper, model_name, temperature):
     
     try:
         model_wrapper = {
-            "google": ChatGoogleGenerativeAI(
-                    model=model_name,
-                    temperature=temperature,
-                    google_api_key=api_key
-                ),
             "openai": ChatOpenAI(
                     model=model_name,
                     temperature=temperature,
@@ -240,6 +239,21 @@ def get_model(wrapper, model_name, temperature):
                     base_url="https://api.perplexity.ai"
             )
         }
+
+        if wrapper == "google":
+            if "gemini-2.5-flash" in model_name:
+                model_wrapper["google"] = ChatGoogleGenerativeAI(
+                    model=model_name,
+                    temperature=temperature,
+                    google_api_key=api_key,
+                    thinking_budget=0  # non-thinking mode
+                )
+            else:
+                model_wrapper["google"] = ChatGoogleGenerativeAI(
+                    model=model_name,
+                    temperature=temperature,
+                    google_api_key=api_key
+                )
         return model_wrapper[wrapper]
     except Exception as e:
         raise RuntimeError(f"Failed to initialize {wrapper} model: {str(e)}") from e

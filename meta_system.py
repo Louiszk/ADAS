@@ -297,14 +297,17 @@ def create_meta_system():
     )
 
     # TestSystem tool
-    def test_meta_system(state: Dict[str, Any]) -> str:
+    def test_meta_system(state=None) -> str:
         """
-            Executes the current system with a simple test input state to validate functionality.
+            Executes the current system with a fixed test state to validate functionality.
         """
+        state = {"messages": [HumanMessage(
+            "Design a simple system that greets the user. It should include a 'GreetingNode' using an LLM."
+            "\nThe system must be completed in no more than 16 iterations."
+            )]}
         final_state = {}
         raw_outputs = []
         error_message = ""
-        task = None
         stdout_capture = io.StringIO()
         stderr_capture = io.StringIO()
         start_time = time.time()
@@ -313,11 +316,7 @@ def create_meta_system():
             # Validate graph structure before execution
             validation_errors = target_system.validate_graph()
             if validation_errors:
-                return "!!Error: Graph validation failed:\n" + "\n".join(validation_errors)
-        
-            if state["messages"][0] and state["messages"][0].content:
-                task = state["messages"][0].content
-                state["messages"][0].content += "\nThe system must be completed in no more than 16 iterations."
+                return "!!Error: Validation failed. The MetaSystem0 has structural flaws:\n" + "\n".join(validation_errors)
                 
             source_code, _ = materialize_system(target_system, output_dir=None)
             namespace = {}
@@ -344,7 +343,7 @@ def create_meta_system():
             if "GraphRecursionError" in repr(e):
                 error_message += "The MetaSystem was unable to end the design process within the 20 iterations limit."
             else:
-                error_message += f"\n{traceback.format_exc(limit=1, chain=False)}"
+                error_message += f"\n{traceback.format_exc(chain=False)}"
                 
         # Calculate metrics
         end_time = time.time()
@@ -353,10 +352,10 @@ def create_meta_system():
         
         # Format output
         captured_output = ""
-        if stdout := stdout_capture.getvalue():
-            captured_output += f"\n\n<STDOUT>\n{stdout}\n</STDOUT>"
-        if stderr := stderr_capture.getvalue():
-            captured_output += f"\n<STDERR>\n{stderr}\n</STDERR>"
+        stdout = stdout_capture.getvalue() or ""
+        stderr = stderr_capture.getvalue() or ""
+        if stdout or stderr:
+            captured_output = f"\n\n<STDOUT+STDERR>\n{stdout}\n{stderr}\n</STDOUT+STDERR>"
         
         # Format metrics
         metrics_str = "\n\n<Metrics>\n"
@@ -374,15 +373,7 @@ def create_meta_system():
         test_result += metrics_str
         test_result += captured_output
         
-        reminder = "\n\nAnalyze the results of how MetaSystem0 designed a TargetSystem, and plan and act accordingly."
-        reminder += "\n\nIMPORTANT:\nYou cannot and should not try to fix the TargetSystem designed during this test. You can only make changes to the MetaSystem0."
-        reminder += f"\nIgnore these instructions you gave the MetaSystem0: \"{task if task else state}\"."
-        reminder += "\nRemember that your task is to optimize MetaSystem0 for any general task, not just the one you gave it in this test."
-        reminder += "\nIf everything works properly with different test cases, or if you have reached the iteration limit, end the design."
-        reminder += "\nOtherwise, identify the ROOT CAUSES of the problems and resolve them."
-        reminder += "\nDo not execute @@test_meta_system again until you have made the necessary fixes to MetaSystem0."
-        
-        return test_result + error_message + reminder
+        return test_result + error_message + test_reminder
     
     meta_system.create_tool(
         "TestMetaSystem",
@@ -441,7 +432,7 @@ def create_meta_system():
     
     # MetaThinker node
     def meta_thinker_function(state: Dict[str, Any]) -> Dict[str, Any]:  
-        llm = LargeLanguageModel(temperature=0.8, wrapper="google", model_name="gemini-2.0-flash")
+        llm = LargeLanguageModel(temperature=0.8, wrapper="google", model_name="gemini-2.5-flash-preview-04-17")
         messages = state.get("messages", [])
 
         code, prompt_code = materialize_system(target_system, output_dir=None)
@@ -471,10 +462,10 @@ def create_meta_system():
     tools = {}
     # MetaAgent node
     def meta_agent_function(state: Dict[str, Any]) -> Dict[str, Any]:  
-        llm = LargeLanguageModel(temperature=0.2, wrapper="google", model_name="gemini-2.0-flash")
+        llm = LargeLanguageModel(temperature=0.2, wrapper="google", model_name="gemini-2.5-flash-preview-04-17")
         llm.bind_tools(list(tools.values()), function_call_type="decorator")
 
-        context_length = 16
+        context_length = 12
         messages = state.get("messages", [])
         iteration = len([msg for msg in messages if isinstance(msg, AIMessage)])
         initial_messages, current_messages = messages[:3], messages[3:]
@@ -507,10 +498,10 @@ def create_meta_system():
             updated_messages.append(human_message)
         else:
             updated_messages.append(HumanMessage(content="\n".join([
-                "You executed no decorators.",
-                "Remember to structure your output like this:" ,
+                "In this previous response, you executed no decorators.",
+                "Remember to always structure your output like this:",
                 "## Current System Analysis\n## Reasoning\n## Actions",
-                "Use this syntax to execute the necessary decorators:\n```\n@@decorator_name()\n```"
+                "Use this syntax to execute decorators:\n```\n@@decorator_name()\n```"
                 ])))
         if iteration == 50:
             updated_messages.append(HumanMessage(content="You have reached 50 of 60 iterations. Try to finish during the next iterations, run a successful test and end the design."))

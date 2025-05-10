@@ -306,7 +306,7 @@ def create_meta_system():
             # Validate graph structure before execution
             validation_errors = target_agentic_system.validate_graph()
             if validation_errors:
-                return "!!Error: Graph validation failed:\n" + "\n".join(validation_errors)
+                return "!!Error: Validation failed. The TargetSystem has structural flaws::\n" + "\n".join(validation_errors)
                 
             source_code, _ = materialize_system(target_agentic_system, output_dir=None)
             namespace = {}
@@ -326,7 +326,7 @@ def create_meta_system():
                     all_outputs.append(output)
 
         except Exception as e:
-            error_message = f"\n\n !!Error while testing the system:\n{traceback.format_exc(limit=1, chain=False)}"
+            error_message = f"\n\n !!Error while testing the system:\n{traceback.format_exc(chain=False)}"
 
         # Calculate execution time and metrics
         end_time = time.time()
@@ -335,10 +335,10 @@ def create_meta_system():
         
         # Capture console output
         captured_output = ""
-        if stdout := stdout_capture.getvalue():
-            captured_output += f"\n\n<STDOUT>\n{stdout}\n</STDOUT>"
-        if stderr := stderr_capture.getvalue():
-            captured_output += f"\n<STDERR>\n{stderr}\n</STDERR>"
+        stdout = stdout_capture.getvalue() or ""
+        stderr = stderr_capture.getvalue() or ""
+        if stdout or stderr:
+            captured_output = f"\n\n<STDOUT+STDERR>\n{stdout}\n{stderr}\n</STDOUT+STDERR>"
         
         # Format metrics for display
         metrics_str = "\n\n<Metrics>\n"
@@ -357,7 +357,7 @@ def create_meta_system():
         test_result += metrics_str
         test_result += captured_output
         
-        reminder = "\n\nAnalyze the results of the TargetSystem, and plan and act accordingly."
+        reminder = "\n\nAnalyze these results of the TargetSystem, and plan and act accordingly."
         reminder += "\nIf everything works properly with different test cases, or if you have reached the iteration limit, end the design."
         reminder += "\nOtherwise, identify the ROOT CAUSES of the problems and resolve them."
 
@@ -454,6 +454,8 @@ def create_meta_system():
 
         context_length = 16
         messages = state.get("messages", [])
+        # Filter out empty messages to avoid 'GenerateContentRequest.contents: contents is not specified'
+        messages = [msg for msg in messages if hasattr(msg, 'content') and msg.content]
         iteration = len([msg for msg in messages if isinstance(msg, AIMessage)])
         initial_messages, current_messages = messages[:3], messages[3:]
         try:
@@ -485,10 +487,10 @@ def create_meta_system():
             updated_messages.append(human_message)
         else:
             updated_messages.append(HumanMessage(content="\n".join([
-                "You executed no decorators.",
-                "Remember to structure your output like this:" ,
+                "In this previous response, you executed no decorators.",
+                "Remember to always structure your output like this:",
                 "## Current System Analysis\n## Reasoning\n## Actions",
-                "Use this syntax to execute the necessary decorators:\n```\n@@decorator_name()\n```"
+                "Use this syntax to execute decorators:\n```\n@@decorator_name()\n```"
                 ])))
         if iteration == 50:
             updated_messages.append(HumanMessage(content="You have reached 50 of 60 iterations. Try to finish during the next iterations, run a successful test and end the design."))

@@ -33,7 +33,6 @@ Your overall goal is to improve the **efficiency and robustness** of the MetaSys
 
 ## Notes
 Remember that you are not part of the MetaSystem0 itself:
-- You design the MetaSystem0 and the MetaSystem0 itself can design arbitrary TargetSystems. MetaMetaSystem0 -> MetaSystem0 -> TargetSystem 
-- The results you see from @@test_meta_system show MetaSystem0 designing a TargetSystem.
+- You design the MetaSystem0 and the MetaSystem0 itself can design arbitrary TargetSystems. MetaMetaSystem0 -> MetaSystem0 -> TargetSystem
 - The tools you see in the Current Code are not the ones you use to design the MetaSystem0. You cannot change your own tools.
 - The system prompts you see and design may differ from your own instructions.

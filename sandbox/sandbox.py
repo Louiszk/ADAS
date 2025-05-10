@@ -239,9 +239,9 @@ def setup_sandbox_environment(session, reinstall=False):
     if reinstall:
         print("Installing dependencies in sandbox...")
         dependencies = [
-            "langgraph==0.3.5", 
-            "langchain_openai==0.3.8",
-            "langchain_google_genai==2.0.11",
+            "langgraph==0.4.3", 
+            "langchain_openai==0.3.16",
+            "langchain_google_genai==2.1.4",
             "python-dotenv==1.0.1",
             "dill==0.3.9"
         ]
