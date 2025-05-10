@@ -353,10 +353,9 @@ def create_meta_system():
             result_str += f"<Output>\n{result}\n</Output>"
             
             captured_output = ""
-            if stdout := stdout_capture.getvalue():
-                captured_output += f"\n\n<STDOUT>\n{stdout}\n</STDOUT>"
-            if stderr := stderr_capture.getvalue():
-                captured_output += f"\n<STDERR>\n{stderr}\n</STDERR>"
+            stdout = stdout_capture.getvalue() or ""
+            stderr = stderr_capture.getvalue() or ""
+            captured_output = f"\n\n<STDOUT+STDERR>\n{stdout}\n{stderr}\n</STDOUT+STDERR>"
                 
             return result_str + captured_output
         
@@ -588,6 +587,7 @@ def create_meta_system():
                         if not "!!Error" in str(msg.content).split("/STDOUT")[-1]:
                             test_passed_recently = True
                         break
+
 
             if test_passed_recently or iteration >= 58:
                 design_completed = True

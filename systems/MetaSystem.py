@@ -1,6 +1,6 @@
 # MetaSystem System Configuration
 # Total nodes: 3
-# Total tools: 10
+# Total tools: 11
 
 # Already installed packages
 # langchain-core 0.3.45
@@ -274,6 +274,75 @@ def build_system():
 
     tools["SystemPrompt"] = tool(runnable=system_prompt, name_or_callable="SystemPrompt")
 
+    # Tool: TestComponent
+    # Description: Tests a component with given arguments
+    def test_component(component_type: str, name: str, inputs: Dict[str, Any]) -> str:
+        """
+            Tests a single component function with the provided inputs.
+                component_type: Type of component to test ('node', 'tool', or 'router')
+                name: Name of the component to test
+                inputs: Dictionary containing the inputs to the function
+                    - For nodes and routers: {"state": {...}}
+                    - For tools: {"kwarg1": value1, ...}
+            Returns the function's output or error message.
+        """
+        try:
+            if component_type.lower() not in ["node", "tool", "router"]:
+                return f"!!Error: Invalid component type '{component_type}'. Must be 'node', 'tool', or 'router'."
+    
+            # Get the function object based on component type
+            func = None
+            if component_type.lower() == "node":
+                if name in target_system.node_functions:
+                    func = target_system.node_functions[name]
+                else:
+                    return f"!!Error: Node '{name}' not found."
+            elif component_type.lower() == "tool":
+                if name in target_system.tool_functions:
+                    func = target_system.tool_functions[name]
+                else:
+                    return f"!!Error: Tool '{name}' not found."
+            elif component_type.lower() == "router":
+                if name in target_system.conditional_edges:
+                    func = target_system.conditional_edges[name].get("condition")
+                else:
+                    return f"!!Error: Router for node '{name}' not found."
+    
+            if not func:
+                return f"!!Error: Function implementation for {component_type} '{name}' not found."
+    
+            # Execute the function with the provided inputs
+            stdout_capture = io.StringIO()
+            stderr_capture = io.StringIO()
+            result = None
+    
+            with contextlib.redirect_stdout(stdout_capture), contextlib.redirect_stderr(stderr_capture):
+                if component_type.lower() in ["node", "router"]:
+                    # Nodes and routers expect a state dictionary
+                    if "state" not in inputs:
+                        return f"!!Error: Nodes and routers require a 'state' parameter in the inputs."
+                    result = func(inputs["state"])
+                else:
+                    result = func(**inputs)
+    
+            # Format the result
+            result_str = f"Test results for {component_type} '{name}':\n"
+            result_str += f"<Output>\n{result}\n</Output>"
+    
+            captured_output = ""
+            stdout = stdout_capture.getvalue() or ""
+            stderr = stderr_capture.getvalue() or ""
+            captured_output = f"\n\n<STDOUT+STDERR>\n{stdout}\n{stderr}\n</STDOUT+STDERR>"
+    
+            return result_str + captured_output
+    
+        except Exception as e:
+            error_traceback = traceback.format_exc()
+            return f"!!Error testing {component_type} '{name}':\n{error_traceback}"
+    
+
+    tools["TestComponent"] = tool(runnable=test_component, name_or_callable="TestComponent")
+
     # Tool: TestMetaSystem
     # Description: Tests the meta system with a given state
     def test_meta_system(state=None) -> str:
@@ -482,6 +551,7 @@ def build_system():
                         if not "!!Error" in str(msg.content).split("/STDOUT")[-1]:
                             test_passed_recently = True
                         break
+    
     
             if test_passed_recently or iteration >= 58:
                 design_completed = True
