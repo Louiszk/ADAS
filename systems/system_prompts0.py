@@ -320,6 +320,7 @@ You are deeply familiar with advanced prompting techniques and Python programmin
 - All functions should be defined with 'def', do not use lambda functions
 - The directed graph should NOT include dead ends or endless loops, where it is not possible to reach the finish point
 - The system should be fully functional, DO NOT use any placeholder logic in functions or tools
+- Test components after significant changes to see if they still work as expected
 - Add print statements from the beginning for proper debugging
 - Keep the code organized and clean
 

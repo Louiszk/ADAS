@@ -377,7 +377,7 @@ def create_meta_system():
         """
         state = {"messages": [HumanMessage(
             "Design a simple system that greets the user. It should include a 'GreetingNode' using an LLM."
-            "\nThe system must be completed in no more than 16 iterations."
+            "\nThe system must be completed in no more than 12 iterations."
             )]}
         final_state = {}
         raw_outputs = []
