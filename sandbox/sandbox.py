@@ -221,8 +221,6 @@ def setup_sandbox_environment(session, reinstall=False):
         ("agentic_system/large_language_model.py", "/sandbox/workspace/agentic_system/large_language_model.py"),
         ("agentic_system/materialize.py", "/sandbox/workspace/agentic_system/materialize.py"),
         ("agentic_system/utils.py", "/sandbox/workspace/agentic_system/utils.py"),
-        ("automated_systems/MetaSystem0_system_prompts.py", "/sandbox/workspace/automated_systems/MetaSystem0_system_prompts.py"),
-        ("automated_systems/MetaSystem0.pkl", "/sandbox/workspace/automated_systems/MetaSystem0.pkl"),
         ("systems/MetaSystem_system_prompts.py", "/sandbox/workspace/systems/MetaSystem_system_prompts.py"),
         ("systems/MetaSystem.py", "/sandbox/workspace/systems/MetaSystem.py"),
         ("sandbox/run_meta.py", "/sandbox/workspace/run_meta.py"),
