@@ -34,7 +34,7 @@ def create_meta_system():
         "from agentic_system.utils import get_filtered_packages, clean_messages, get_metrics",
         "from agentic_system.virtual_agentic_system import VirtualAgenticSystem",
         "from agentic_system.materialize import materialize_system",
-        "target_agentic_system = VirtualAgenticSystem('TargetSystem')",
+        "target_agentic_system = None",
         "import dill as pickle",
         "import traceback",
         "import time",

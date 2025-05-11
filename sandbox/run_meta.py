@@ -51,15 +51,15 @@ def main():
             path = "/sandbox/workspace/automated_systems/" + optimize_from_file.replace("/", "_").replace("\\", "_").replace(":", "_")
             try:
                 with open(path + '.pkl', 'rb') as f:
-                    MetaSystem.target_system = pickle.load(f)
+                    MetaSystem.target_agentic_system = pickle.load(f)
 
-                MetaSystem.target_system.system_name = system_name
+                MetaSystem.target_agentic_system.system_name = system_name
                 print("Code initialized")
             except Exception as e:
                 print(f"Error initializing: {e}")
-                MetaSystem.target_system = VirtualAgenticSystem(system_name)
+                MetaSystem.target_agentic_system = VirtualAgenticSystem(system_name)
         else:
-            MetaSystem.target_system = VirtualAgenticSystem(system_name)
+            MetaSystem.target_agentic_system = VirtualAgenticSystem(system_name)
        
         workflow, tools = MetaSystem.build_system()
         inputs = {"messages": [HumanMessage(content=problem_statement)]}
