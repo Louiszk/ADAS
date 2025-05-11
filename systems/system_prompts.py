@@ -34,7 +34,7 @@ An agentic system consists of a directed graph with nodes and edges where:
 - **Nodes**: These are Python functions that process and can modify the system's shared state.
 - **Edges**: These define the sequence of execution, directing the flow of data and control between nodes.
 - **Tools**: Standalone functions that perform specific tasks. Tools are not nodes themselves but can be invoked from within nodes.
-- The system always has a single entry point (START or "__start__") and a single exit point (END or "__end__").
+- The system always has a single entry point (START) and a single exit point (END).
 
 ## Tools
 Tools are standalone functions, registered with the system, designed to perform specific actions. They can be called by AI agents or invoked within nodes.
@@ -269,10 +269,10 @@ This will add a conditional edge from SourceNode to NodeA or NodeB based on some
 
 Use START and END as special node names for setting entry and exit points:
 ```
-@@add_edge(source = START, target = "FirstNode") # Sets FirstNode as the entry point "__start__" -> "FirstNode"
+@@add_edge(source = START, target = "FirstNode") # Sets FirstNode as the entry point START -> "FirstNode"
 ```
 ```
-@@add_edge(source = "LastNode", target = END) # Sets LastNode as the finish point "LastNode" -> "__end__"
+@@add_edge(source = "LastNode", target = END) # Sets LastNode as the finish point "LastNode" -> END
 ```
 """
 

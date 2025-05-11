@@ -4,17 +4,7 @@ import textwrap
 import collections
 import inspect
 from langgraph.graph import START, END
-
-class ReturnValueExtractor(ast.NodeVisitor):
-    """AST visitor that extracts string literals and END constants from return statements."""
-    def __init__(self):
-        self.returned_values = set()
-
-    def visit_Return(self, node):
-        if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
-            self.returned_values.add(node.value.value)
-        elif isinstance(node.value, ast.Name) and node.value.id == "END":
-            self.returned_values.add(END)
+from langchain_core.tools import tool
 
 def _extract_top_level_names(ast_module: ast.Module) -> set[str]:
     names = set()
@@ -123,33 +113,31 @@ class VirtualAgenticSystem:
         return True
     
     def _infer_path_map(self, function_code: str) -> dict:
-        """Infer possible return values from conditional edge function using AST parsing."""
-        try:
-            dedented_code = textwrap.dedent(function_code)
-            tree = ast.parse(dedented_code)
-            
-            # Get function node if within a module
-            func_node = tree
-            if isinstance(tree, ast.Module) and tree.body and isinstance(tree.body[0], ast.FunctionDef):
-                func_node = tree.body[0]
-
-            # Extract return values
-            extractor = ReturnValueExtractor()
-            extractor.visit(func_node)
-            
-            # Build path map
-            path_map = {}
-            for val in extractor.returned_values:
-                if val == END:
-                    path_map["END"] = END
-                elif isinstance(val, str):
-                    path_map[val] = val
-            
-            return path_map
-        except SyntaxError:
-            return {}
-        except Exception:
-            return {}
+        """Infer possible return values from conditional edge function using regex."""
+        path_map = {}
+        known_nodes = set(self.nodes.keys())
+        dedented_code = textwrap.dedent(function_code)
+        string_matches = []
+        
+        string_literal_pattern = r'"((?:[^"\\]|\\.)*)"|\'((?:[^\'\\]|\\.)*)\''
+        for match in re.finditer(string_literal_pattern, dedented_code):
+            potential_target_str = match.group(1) if match.group(1) is not None else match.group(2)
+            string_matches.append(potential_target_str)
+        
+        # Check for the END constant
+        end_pattern = r'\bEND\b'
+        has_end = bool(re.search(end_pattern, function_code))
+        
+        # Add all potential node names to the path map
+        for node_name in string_matches:
+            if node_name in known_nodes:
+                path_map[node_name] = node_name
+        
+        # Add END if it appears in the function
+        if has_end:
+            path_map["END"] = END
+        
+        return path_map
 
     def create_edge(self, source, target):
         """Create a standard edge between nodes."""
@@ -263,12 +251,24 @@ class VirtualAgenticSystem:
             return "!!Error: Could not identify function name in the provided code"
         
         function_name = match.group(1)
-        completed_function_code = "\n".join(self.imports) + "\n" + function_code    
-        local_vars = {}
-        exec(completed_function_code, {"__builtins__": __builtins__}, local_vars)
-        
-        if function_name in local_vars and callable(local_vars[function_name]):
-            new_function = local_vars[function_name]
+
+        try:
+            func_exec_globals = {"__builtins__": __builtins__, "START": START, "END": END}
+            func_exec_globals["tools"] = self._get_runtime_tools()
+            
+            combined_code_parts = []
+            combined_code_parts.extend(self.imports)
+            combined_code_parts.append(textwrap.dedent(self.system_prompt_code))
+            combined_code_parts.append(textwrap.dedent(function_code))
+            
+            full_code_to_exec = "\n".join(combined_code_parts)
+
+            exec(full_code_to_exec, func_exec_globals) 
+        except Exception as e:
+            return f"!!Error executing function or import code for '{function_name}': {repr(e)}"
+            
+        if function_name in func_exec_globals and callable(func_exec_globals[function_name]):
+            new_function = func_exec_globals[function_name]
             return new_function
         else:
             return f"!!Error: Function '{function_name}' not found after execution"
@@ -345,7 +345,7 @@ class VirtualAgenticSystem:
             
             path_map = edge_info.get("path_map", {})
             if not path_map:
-                errors.append(f"Conditional edge source '{s}' has no paths defined in its path_map.")
+                errors.append(f"Conditional edge from source '{s}' has no correct return values. Must return a non-dynamically defined string or END.")
             
             for path_key, path_target in path_map.items():
                 if path_target != END and path_target not in all_defined_nodes:
@@ -431,3 +431,17 @@ class VirtualAgenticSystem:
                     errors.append(f"Node '{node_name}' has no outgoing edges.")
 
         return sorted(list(set(errors)))
+    
+    def _get_runtime_tools(self):
+        runtime_lc_tools = {}
+        if self.tool_functions:
+            for t_name, t_func in self.tool_functions.items():
+                if callable(t_func):
+                    tool_description = self.tools.get(t_name, t_func.__doc__ or f"Tool {t_name}")
+                    if not t_func.__doc__ and tool_description:
+                        t_func.__doc__ = tool_description
+                    elif not t_func.__doc__ and not tool_description:
+                        t_func.__doc__ = f"Dynamically created tool: {t_name}"
+
+                    runtime_lc_tools[t_name] = tool(runnable=t_func, name_or_callable=t_name)
+        return runtime_lc_tools

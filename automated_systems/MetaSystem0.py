@@ -500,9 +500,9 @@ def build_system():
     # ===== Standard Edges =====
     graph.add_edge("MetaThinker", "MetaAgent")
 
-    graph.add_edge("__start__", "MetaThinker")
+    graph.add_edge(START, "MetaThinker")
 
-    graph.add_edge("EndDesign", "__end__")
+    graph.add_edge("EndDesign", END)
 
     # ===== Conditional Edges =====
     # Conditional Router from: MetaAgent
@@ -513,7 +513,7 @@ def build_system():
         return "MetaAgent"
     
 
-    graph.add_conditional_edges("MetaAgent", design_completed_router, {'MetaAgent': 'MetaAgent', 'EndDesign': 'EndDesign'})
+    graph.add_conditional_edges("MetaAgent", design_completed_router)
 
     # ===== Compilation =====
     workflow = graph.compile()

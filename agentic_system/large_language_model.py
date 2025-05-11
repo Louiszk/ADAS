@@ -2,7 +2,7 @@ import os
 from langgraph.graph import START, END
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import ToolMessage, HumanMessage, SystemMessage
+from langchain_core.messages import ToolMessage, HumanMessage, AIMessage, SystemMessage
 from agentic_system.utils import extract_parenthesized_content, find_code_blocks
 from dotenv import load_dotenv
 import re
@@ -12,7 +12,9 @@ def parse_arguments(args_str):
     
     if args_str:
         eval_context = {
-            "HumanMessage": HumanMessage, 
+            "HumanMessage": HumanMessage,
+            "AIMessage": AIMessage,
+            "ToolMessage": ToolMessage,
             "START": START, 
             "END": END
         }
@@ -143,7 +145,7 @@ def execute_decorator_tool_calls(response_content, available_tools):
             break
 
         if tool_call is None:
-            tool_messages.append(f"Found not decorator in code block {i}")
+            tool_messages.append(f"Found no decorators in code block {i}")
             continue
 
         tool_name = tool_call['name']

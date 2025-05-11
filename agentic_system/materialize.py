@@ -3,6 +3,7 @@ import textwrap
 import re
 import os
 import copy
+from langgraph.graph import START, END
 
 def get_function_source(func):
     """Extract source code from a function."""
@@ -149,8 +150,11 @@ def materialize_system(system, output_dir="systems"):
         code_lines.append("    # ===== Standard Edges =====")
         
         for source, target in system.edges:
+            source_code = "START" if source is START else f'"{source}"'
+            target_code = "END" if target is END else f'"{target}"'
+            
             code_lines.extend([
-                f"    graph.add_edge(\"{source}\", \"{target}\")",
+                f"    graph.add_edge({source_code}, {target_code})",
                 ""
             ])
     
@@ -171,18 +175,13 @@ def materialize_system(system, output_dir="systems"):
 
             condition_implementations[source] = func_source
             
-            path_map_str = ""
-            if "path_map" in edge_info:
-                path_map = edge_info["path_map"]
-                path_map_str = f", {repr(path_map)}"
-            
             indented_source = "\n".join(f"    {line}" for line in condition_implementations[source].split('\n'))
             
             code_lines.extend([
                 f"    # Conditional Router from: {source}",
                 indented_source,
                 "",
-                f"    graph.add_conditional_edges(\"{source}\", {original_name}{path_map_str})",
+                f"    graph.add_conditional_edges(\"{source}\", {original_name})",
                 ""
             ])
 
