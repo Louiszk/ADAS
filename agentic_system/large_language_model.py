@@ -11,20 +11,37 @@ def parse_arguments(args_str):
     pos_args, kw_args = (), {}
     
     if args_str:
+        eval_context = {
+            "HumanMessage": HumanMessage, 
+            "START": START, 
+            "END": END
+        }
+        
+        results_from_exec = {} 
+        exec_str = f"def _parsing_temp_func(*args, **kwargs): return args, kwargs\npos_args, kw_args = _parsing_temp_func({args_str})"
+        
         try:
-            exec_str = f"def parsing_function(*args, **kwargs): return args, kwargs\npos_args, kw_args = parsing_function({args_str})"
-            locals = {"HumanMessage" : HumanMessage, "START": START, "END": END}
-            exec(exec_str, {}, locals)
-            pos_args = locals.get('pos_args', ())
-            kw_args = locals.get('kw_args', {})
+            exec(exec_str, eval_context, results_from_exec)
+            
+            pos_args = results_from_exec.get('pos_args', ())
+            kw_args = results_from_exec.get('kw_args', {})
+        except NameError as ne:
+            error_msg = (f"Invalid argument: a name '{ne.name}' was used in the tool arguments "
+                         f"'{args_str}' but it is not defined. Do not use '{ne.name}'.")
+            raise ValueError(error_msg) from ne # Propagate as ValueError
+        except SyntaxError as se:
+            error_msg = (f"Syntax error in tool arguments: '{args_str}'. Please ensure the "
+                         f"arguments are correctly formatted. Details: {se}")
+            raise ValueError(error_msg) from se
         except Exception as e:
-            print(f"Error parsing arguments: {e}")
-    
+            # Catch other parsing errors
+            raise ValueError(f"Failed to parse tool arguments '{args_str}': {e}") from e
+            
     return pos_args, kw_args
 
-def parse_decorator_tool_calls(text):
+def parse_decorator_tool_calls(block_content):
     """Parse decorator-style tool calls from text."""
-    tool_calls = []
+    tool_call = None
     
     def camelfy(snake_case):
         parts = snake_case.split("_")
@@ -36,90 +53,99 @@ def parse_decorator_tool_calls(text):
         'system_prompt': 'system_prompt_code'
     }
     
+
+    lines = block_content.split('\n')
+    occurrences = sum([1 if line.strip().startswith('@@') else 0 for line in lines])
+    
+    # First check if we should process this block at all
+    first_decorator = None
+    for line in lines:
+        if line.strip().startswith('@@'):
+            call_match = re.match(r'@@([a-zA-Z_][a-zA-Z0-9_]*)', line.strip())
+            if call_match:
+                first_decorator = call_match.group(1)
+                break
+    
+    # Skip blocks with multiple @@ that aren't system_prompt
+    if occurrences > 1 and first_decorator != 'system_prompt':
+        raise ValueError(f"Found block with multiple decorators (found {occurrences})")
+    
+    # Process just the first decorator in the block
+    processed_decorator = False
+    i = 0
+    
+    while i < len(lines) and not processed_decorator:
+        line = lines[i].strip()
+        
+        if line.startswith('@@'):
+            call_match = re.match(r'@@([a-zA-Z_][a-zA-Z0-9_]*)', line)
+            if call_match:
+                decorator_name = call_match.group(1)
+                start_pos = call_match.end()
+                
+                open_paren_pos = line.find('(', start_pos)
+                
+                if open_paren_pos != -1:
+                    # Extract arguments
+                    args_str, end_line_idx = extract_parenthesized_content(lines, i, open_paren_pos)
+                    pos_args, kw_args = parse_arguments(args_str)
+
+                    # Map decorator name to tool name if possible
+                    tool_name = camelfy(decorator_name)
+                    
+                    if decorator_name in code_related_tools:
+                        # For code-related decorators, include the entire block after the decorator
+                        code_start = end_line_idx + 1
+                        code_end = len(lines)
+                        
+                        content = '\n'.join(lines[code_start:code_end])
+                        
+                        param_name = code_related_tools[decorator_name]
+                        kw_args[param_name] = content
+                    
+                    tool_call = {
+                        'name': tool_name,
+                        'decorator_name': decorator_name,
+                        'pos_args': pos_args,
+                        'kw_args': kw_args
+                    }
+                    
+                    processed_decorator = True
+            
+        i += 1
+    
+    return tool_call
+
+def execute_decorator_tool_calls(response_content, available_tools):
+    """Execute decorator-style tool calls found in the text."""
     # Extract code blocks
-    code_blocks = find_code_blocks(text)
+    code_blocks = find_code_blocks(response_content)
     if not code_blocks:
         print("No markdown blocks found in the agent's response! Unable to parse decorators.")
-    
-    for block_content in code_blocks:
-        lines = block_content.split('\n')
-        occurrences = sum([1 if line.strip().startswith('@@') else 0 for line in lines])
-        
-        # First check if we should process this block at all
-        first_decorator = None
-        for line in lines:
-            if line.strip().startswith('@@'):
-                call_match = re.match(r'@@([a-zA-Z_][a-zA-Z0-9_]*)', line.strip())
-                if call_match:
-                    first_decorator = call_match.group(1)
-                    break
-        
-        # Skip blocks with multiple @@ that aren't system_prompt
-        if occurrences > 1 and first_decorator != 'system_prompt':
-            print(f"Skipping block with multiple decorators (found {occurrences})")
-            continue
-        
-        # Process just the first decorator in the block
-        processed_decorator = False
-        i = 0
-        
-        while i < len(lines) and not processed_decorator:
-            line = lines[i].strip()
-            
-            if line.startswith('@@'):
-                call_match = re.match(r'@@([a-zA-Z_][a-zA-Z0-9_]*)', line)
-                if call_match:
-                    decorator_name = call_match.group(1)
-                    start_pos = call_match.end()
-                    
-                    open_paren_pos = line.find('(', start_pos)
-                    
-                    if open_paren_pos != -1:
-                        # Extract arguments
-                        args_str, end_line_idx = extract_parenthesized_content(lines, i, open_paren_pos)
-                        pos_args, kw_args = parse_arguments(args_str)
 
-                        # Map decorator name to tool name if possible
-                        tool_name = camelfy(decorator_name)
-                        
-                        if decorator_name in code_related_tools:
-                            # For code-related decorators, include the entire block after the decorator
-                            code_start = end_line_idx + 1
-                            code_end = len(lines)
-                            
-                            content = '\n'.join(lines[code_start:code_end])
-                            
-                            param_name = code_related_tools[decorator_name]
-                            kw_args[param_name] = content
-                        
-                        tool_calls.append({
-                            'name': tool_name,
-                            'decorator_name': decorator_name,
-                            'pos_args': pos_args,
-                            'kw_args': kw_args
-                        })
-                        
-                        processed_decorator = True
-            
-            i += 1
-    
-    return tool_calls
-
-def execute_decorator_tool_calls(response, available_tools):
-    """Execute decorator-style tool calls found in the text."""
-    tool_calls = parse_decorator_tool_calls(response)
-    if not tool_calls:
-        return None, {}
         
     tool_messages = []
     tool_results = {}
     
     def add_skipped_calls_message(current_index):
-        remaining_calls = len(tool_calls) - current_index - 1
+        remaining_calls = len(code_blocks) - current_index - 1
         if remaining_calls > 0:
             tool_messages.append(f"Note: {remaining_calls} remaining decorator call(s) in this response skipped. You can make new decorator calls in your next response.")
     
-    for i, tool_call in enumerate(tool_calls):
+    for i, code_block in enumerate(code_blocks):
+        try:
+            tool_call = parse_decorator_tool_calls(code_block)
+        except Exception as e:
+            parsing_error_message = f"Error parsing code block {i}: {repr(e)}"
+            tool_messages.append(parsing_error_message)
+            
+            add_skipped_calls_message(i)
+            break
+
+        if tool_call is None:
+            tool_messages.append(f"Found not decorator in code block {i}")
+            continue
+
         tool_name = tool_call['name']
         decorator_name = tool_call['decorator_name']
         pos_args = tool_call.get('pos_args', ())
