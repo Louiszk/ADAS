@@ -534,7 +534,7 @@ def build_system():
                 "Use this syntax to execute decorators:\n```\n@@decorator_name()\n```"
                 ]))
         if iteration == 50:
-            human_message.content += "You have reached 50 of 60 iterations. Try to finish during the next iterations, run a successful test and end the design."
+            human_message.content += "\n\nYou have reached 50 of 60 iterations. Try to finish during the next iterations, run a successful test and end the design."
     
         updated_messages = messages + [response]
         human_message.content = f"[Iteration {iteration}]\n\n" + human_message.content
