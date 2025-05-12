@@ -278,20 +278,16 @@ Your output **MUST** be structured as follows:
 - Tools (name, purpose, key functionality)
 - Edges and conditional edges (flow description)
 
-## System Efficiency
-- Performance considerations
-- Resource management (e.g. tokens, time)
-
 ## Potential Challenges
 - Risks and Pitfalls to avoid
 - Edge Case handling
-- Contingency Plan
 
 Be thorough but concise. Focus on providing a clear roadmap that will guide the implementation phase.
 Remember that there is a maximum number of iterations to finish the system, adjust the complexity based on this.
+One iteration is one of your responses. Often in the design process, mistakes are made that take multiple iterations to fix.
 This means that you should not create a super ambitious roadmap that is impossible to complete within the iteration limit.
 
-Do not implement any code yet - just create the architectural plan, that is, the roadmap.
+Do not implement any code yet. Do not use the decorators yet - just create the architectural plan, that is, the roadmap.
 '''
 
 meta_agent = '''

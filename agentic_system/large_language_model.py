@@ -305,7 +305,7 @@ class LargeLanguageModel:
                     self.model = self.model.bind_tools(tool_objects)
                 else:
                     self.model = self.model.bind_tools(tool_objects, parallel_tool_calls=parallel_tool_calls)
-        return self.model
+        return self
 
     def invoke(self, input):
         return self.model.invoke(input)

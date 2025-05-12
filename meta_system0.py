@@ -295,7 +295,7 @@ def create_meta_system():
             Executes the current system with a test input state to validate functionality.
                 state: A python dictionary with state attributes e.g. {"messages": ["Test Input"], "attr2": [3, 5]}
         """
-        all_outputs = []
+        final_state = {}
         raw_outputs = []
         error_message = ""
         stdout_capture = io.StringIO()
@@ -323,7 +323,7 @@ def create_meta_system():
                 for output in target_workflow.stream(state, config={"recursion_limit": 20}):
                     raw_outputs.append(output.copy())  # Store raw output for metrics
                     output["messages"] = clean_messages(output) # Only get content and tool_calls from messages
-                    all_outputs.append(output)
+                    final_state = output # Only get the final state that contains all the messages
 
         except Exception as e:
             error_message = f"\n\n !!Error while testing the system:\n{traceback.format_exc(chain=False)}"
@@ -349,10 +349,10 @@ def create_meta_system():
         metrics_str += f"Output: {metrics['token_usage']['output_tokens']})\n"
         metrics_str += "</Metrics>"
         
-        result = "\n".join([f"State {i}: " + str(out) for i, out in enumerate(all_outputs)]) if all_outputs else {}
+        result = str(final_state)
         
         # Construct the final result with metrics
-        test_result = f"Test completed.\n <SystemStates>\n{result}\n</SystemStates>"
+        test_result = f"Test completed.\n<FinalState>\n{result}\n</FinalState>"
         test_result += metrics_str
         test_result += captured_output
         
@@ -397,12 +397,6 @@ def create_meta_system():
             materialize_system(target_agentic_system, output_dir=code_dir)
             print(f"System code materialized to {code_dir}")
     
-            pickle_name = target_agentic_system.system_name.replace("/", "_").replace("\\", "_").replace(":", "_") + ".pkl"
-            pickle_path = os.path.join(code_dir, pickle_name)
-            with open(pickle_path, 'wb') as f:
-                pickle.dump(target_agentic_system, f)
-            print(f"System pickled to {pickle_path}")
-    
             return "Ending the design process..."
         except Exception as e:
             error_msg = f"!!Error finalizing system: {repr(e)}"
@@ -423,12 +417,13 @@ def create_meta_system():
         messages = state.get("messages", [])
 
         code, prompt_code = materialize_system(target_agentic_system, output_dir=None)
-        code_message = "---Current Code:\n" + code
-        code_message += ("\n---System Prompts File:\n" + prompt_code) if prompt_code else ""
+        code_message = "**Here is the Current Code:**\n" + code
+        code_message += ("\n\n**System Prompts File:**\n" + prompt_code) if prompt_code else ""
     
         full_messages = [SystemMessage(content=meta_thinker)] + messages + [HumanMessage(content=code_message)]
         print("Thinking...")
         response = llm.invoke(full_messages)
+        response.content = "[Iteration 0]\n\n" + response.content
 
         transition_message = HumanMessage(content= "\n".join([
             "Thank you for the detailed plan. Please implement this system design step by step.",
@@ -469,31 +464,33 @@ def create_meta_system():
             print(f"Error during message trimming: {e}")
 
         code, prompt_code = materialize_system(target_agentic_system, output_dir=None)
-        code_message = f"---(Iteration {iteration}) Current Code:\n" + code
-        code_message += ("\n---System Prompts File:\n" + prompt_code) if prompt_code else ""
+        code_message = f"**You are now in Iteration {iteration}**\n**Here is the Current Code:**\n" + code
+        code_message += ("\n\n**System Prompts File:**\n" + prompt_code) if prompt_code else ""
     
         full_messages = [SystemMessage(content=meta_agent)] + initial_messages + trimmed_messages + [HumanMessage(content=code_message)]
         response = llm.invoke(full_messages)
 
         if not hasattr(response, 'content') or not response.content:
             response.content = "I will execute the necessary decorators."
+        response.content = f"[Iteration {iteration}]\n\n" + response.content
         
         # This will parse the decorators from the response and correctly execute the functions
         human_message, tool_results = llm.execute_tool_calls(response.content, function_call_type="decorator")
 
-        updated_messages = messages + [response]
-        if human_message:
-            updated_messages.append(human_message)
-        else:
-            updated_messages.append(HumanMessage(content="\n".join([
+        if not human_message:
+            human_message = HumanMessage(content="\n".join([
                 "In this previous response, you executed no decorators.",
+                "Do not repeat yourself indefinitely.",
                 "Remember to always structure your output like this:",
                 "## Current System Analysis\n## Reasoning\n## Actions",
                 "Use this syntax to execute decorators:\n```\n@@decorator_name()\n```"
-                ])))
+                ]))
         if iteration == 50:
-            updated_messages.append(HumanMessage(content="You have reached 50 of 60 iterations. Try to finish during the next iterations, run a successful test and end the design."))
+            human_message.content += "\n\nYou have reached 50 of 60 iterations. Try to finish during the next iterations, run a successful test and end the design."
 
+        updated_messages = messages + [response]
+        human_message.content = f"[Iteration {iteration}]\n\n" + human_message.content
+        updated_messages.append(human_message)
             
         # Ending the design if the last test ran without errors
         design_completed = False

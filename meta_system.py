@@ -371,7 +371,7 @@ def create_meta_system():
     
         result = str(final_state)
     
-        test_result = f"MetaSystem0 Test completed.\n <FinalState>\n{result}\n</FinalState>"
+        test_result = f"MetaSystem0 Test completed.\n<FinalState>\n{result}\n</FinalState>"
         test_result += metrics_str
         test_result += captured_output
         
@@ -412,12 +412,6 @@ def create_meta_system():
             materialize_system(target_system, output_dir=code_dir)
             print(f"System code materialized to {code_dir}")
     
-            pickle_name = target_system.system_name.replace("/", "_").replace("\\", "_").replace(":", "_") + ".pkl"
-            pickle_path = os.path.join(code_dir, pickle_name)
-            with open(pickle_path, 'wb') as f:
-                pickle.dump(target_system, f)
-            print(f"System pickled to {pickle_path}")
-    
             return "Ending the design process..."
         except Exception as e:
             error_msg = f"!!Error finalizing system: {repr(e)}"
@@ -438,17 +432,17 @@ def create_meta_system():
         messages = state.get("messages", [])
 
         code, prompt_code = materialize_system(target_system, output_dir=None)
-        code_message = "---Current Code:\n" + code
-        code_message += ("\n---System Prompts File:\n" + prompt_code) if prompt_code else ""
+        code_message = "**Here is the Current Code:**\n" + code
+        code_message += ("\n\n**System Prompts File:**\n" + prompt_code) if prompt_code else ""
     
         full_messages = [SystemMessage(content=meta_thinker)] + messages + [HumanMessage(content=code_message)]
         print("Thinking...")
         response = llm.invoke(full_messages)
-        response.content = "# Roadmap\n\n" + response.content
+        response.content = "[Iteration 0]\n\n# Roadmap\n" + response.content
 
         transition_message = HumanMessage(content= "\n".join([
             "Thank you for the detailed plan. Please implement this system design step by step.",
-            "Never deviate from the plan. This plan is now your road map."
+            "Never deviate from the plan. This plan is now your roadmap."
             ]))
         updated_messages = messages + [response, transition_message] 
 
@@ -483,8 +477,8 @@ def create_meta_system():
             print(f"Error during message trimming: {e}")
 
         code, prompt_code = materialize_system(target_system, output_dir=None)
-        code_message = f"---(Iteration {iteration}) Current Code:\n" + code
-        code_message += ("\n---System Prompts File:\n" + prompts_info + prompt_code) if prompt_code else ""
+        code_message = f"**You are now in Iteration {iteration}**\n**Here is the Current Code:**\n" + code
+        code_message += ("\n\n**System Prompts File:**\n" + prompt_code) if prompt_code else ""
     
         full_messages = [SystemMessage(content=meta_agent)] + initial_messages + trimmed_messages + [HumanMessage(content=code_message)]
         print([getattr(last_msg, 'type', 'Unknown') for last_msg in full_messages])
@@ -492,22 +486,24 @@ def create_meta_system():
 
         if not hasattr(response, 'content') or not response.content:
             response.content = "I will execute the necessary decorators."
+        response.content = f"[Iteration {iteration}]\n\n" + response.content
         
         human_message, tool_results = llm.execute_tool_calls(response.content, function_call_type="decorator")
 
-        updated_messages = messages + [response]
-        if human_message:
-            updated_messages.append(human_message)
-        else:
-            updated_messages.append(HumanMessage(content="\n".join([
+        if not human_message:
+            human_message = HumanMessage(content="\n".join([
                 "In this previous response, you executed no decorators.",
+                "Do not repeat yourself indefinitely.",
                 "Remember to always structure your output like this:",
                 "## Current System Analysis\n## Reasoning\n## Actions",
                 "Use this syntax to execute decorators:\n```\n@@decorator_name()\n```"
-                ])))
+                ]))
         if iteration == 50:
-            updated_messages.append(HumanMessage(content="You have reached 50 of 60 iterations. Try to finish during the next iterations, run a successful test and end the design."))
+            human_message.content += "You have reached 50 of 60 iterations. Try to finish during the next iterations, run a successful test and end the design."
 
+        updated_messages = messages + [response]
+        human_message.content = f"[Iteration {iteration}]\n\n" + human_message.content
+        updated_messages.append(human_message)
             
         # Ending the design if the last test ran without errors
         design_completed = False
