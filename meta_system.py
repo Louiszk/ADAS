@@ -323,7 +323,7 @@ def create_meta_system():
                 for output in target_workflow.stream(state, config={"recursion_limit": 20}):
                     raw_outputs.append(output.copy())  # Store raw output for metrics
                     output["messages"] = clean_messages(output) # Only get content and tool_calls from messages
-                    final_state = output
+                    final_state = output # Only get the final state that contains all the messages
 
         except Exception as e:
             error_message = f"\n\n !!Error while testing the system:\n{traceback.format_exc(chain=False)}"
@@ -348,10 +348,11 @@ def create_meta_system():
         metrics_str += f"(Input: {metrics['token_usage']['input_tokens']}, "
         metrics_str += f"Output: {metrics['token_usage']['output_tokens']})\n"
         metrics_str += "</Metrics>"
-    
+        
         result = str(final_state)
-    
-        test_result = f"MetaSystem0 Test completed.\n<FinalState>\n{result}\n</FinalState>"
+        
+        # Construct the final result with metrics
+        test_result = f"Test completed.\n<FinalState>\n{result}\n</FinalState>"
         test_result += metrics_str
         test_result += captured_output
         
@@ -426,7 +427,7 @@ def create_meta_system():
 
         transition_message = HumanMessage(content= "\n".join([
             "Thank you for the detailed plan. Please implement this system design step by step.",
-            "Never deviate from the plan. This plan is now your roadmap."
+            "Never deviate from the plan. This plan is now your road map."
             ]))
         updated_messages = messages + [response, transition_message] 
 
@@ -485,7 +486,7 @@ def create_meta_system():
                 "Use this syntax to execute decorators:\n```\n@@decorator_name()\n```"
                 ]))
         if iteration == 50:
-            human_message.content += "You have reached 50 of 60 iterations. Try to finish during the next iterations, run a successful test and end the design."
+            human_message.content += "\n\nYou have reached 50 of 60 iterations. Try to finish during the next iterations, run a successful test and end the design."
 
         updated_messages = messages + [response]
         human_message.content = f"[Iteration {iteration}]\n\n" + human_message.content
