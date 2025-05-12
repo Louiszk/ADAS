@@ -21,16 +21,18 @@ def run_meta_system_in_sandbox(session, problem_statement, target_name, optimize
         target_file_name = escaped_target_name + ".py"
         system_prompt_file_name = escaped_target_name + "_system_prompts.py"
         
-        if target_file_name in str(session.execute_command("ls -la /sandbox/workspace/automated_systems")):
+        as_dir = str(session.execute_command("ls -la /sandbox/workspace/automated_systems"))
+        if target_file_name in as_dir:
             session.copy_from_runtime(
                 f"/sandbox/workspace/automated_systems/{target_file_name}", 
                 f"automated_systems/{target_file_name}"
             )
+        if system_prompt_file_name in as_dir:
             session.copy_from_runtime(
                 f"/sandbox/workspace/automated_systems/{system_prompt_file_name}", 
                 f"automated_systems/{system_prompt_file_name}"
             )
-            print(f"Copied {target_file_name} and system prompts back to host")
+        print(f"Copied {target_file_name} and system prompts back to host")
         
         if "metrics" in str(session.execute_command("ls -la /sandbox/workspace/automated_systems")):
             metrics_file = target_name.replace("/", "_").replace("\\", "_").replace(":", "_") + ".json"
