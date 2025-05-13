@@ -321,11 +321,20 @@ def create_meta_system():
             if validation_errors:
                 return "!!Error: Validation failed. The MetaSystem0 has structural flaws:\n" + "\n".join(validation_errors)
                 
-            source_code, _ = materialize_system(target_system, output_dir=None)
+            source_code, system_prompts = materialize_system(target_system, output_dir=None)
             namespace = {}
-        
+
+            if system_prompts:
+                exec(system_prompts, namespace, namespace)
+
+            escaped_name_for_module = target_system.system_name.replace("/", "").replace("\\", "").replace(":", "")
+            prompt_import_line_pattern = f"from automated_systems.{escaped_name_for_module}_system_prompts import *"
+            
+            patched_source_code = source_code.replace(prompt_import_line_pattern, "")
+            
+            # Capture stdout and stderr during execution
             with contextlib.redirect_stdout(stdout_capture), contextlib.redirect_stderr(stderr_capture):
-                exec(source_code, namespace, namespace)
+                exec(patched_source_code, namespace, namespace)
                 
                 if 'build_system' not in namespace:
                     raise Exception("Could not find build_system function in generated code")
