@@ -10,6 +10,7 @@ def run_fever_benchmark_in_sandbox(session, system_name, dataset_name="fever_sub
     
     base_path = "benchmark/FEVER"
     system_path = system_name.replace(".", "/") + ".py"
+    system_prompts_path = system_name.replace(".", "/") + "_system_prompts.py"
     os.makedirs(base_path, exist_ok=True)
     
     # Ensure the benchmark directory exists in the sandbox
@@ -21,6 +22,7 @@ def run_fever_benchmark_in_sandbox(session, system_name, dataset_name="fever_sub
     session.copy_to_runtime(f"{base_path}/run_fever_bench.py", f"/sandbox/workspace/{base_path}/run_fever_bench.py")
     session.copy_to_runtime(f"{base_path}/{dataset_name}", f"/sandbox/workspace/{base_path}/{dataset_name}")
     session.copy_to_runtime(system_path, f"/sandbox/workspace/{system_path}")
+    session.copy_to_runtime(system_prompts_path, f"/sandbox/workspace/{system_prompts_path}")
     
     if "not found" in str(session.execute_command("pip show beautifulsoup4")):
         session.execute_command("pip install beautifulsoup4")

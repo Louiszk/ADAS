@@ -10,6 +10,7 @@ def run_gsmhard_benchmark_in_sandbox(session, system_name):
     
     base_path = "benchmark/GSMHard"
     system_path = system_name.replace(".", "/") + ".py"
+    system_prompts_path = system_name.replace(".", "/") + "_system_prompts.py"
     os.makedirs(base_path, exist_ok=True)
     
     # Ensure the benchmark directory exists in the sandbox
@@ -22,6 +23,7 @@ def run_gsmhard_benchmark_in_sandbox(session, system_name):
     session.copy_to_runtime(f"{base_path}/GSMHardBaseline.py", f"/sandbox/workspace/{base_path}/GSMHardBaseline.py")
     session.copy_to_runtime(f"{base_path}/GSMHardExecBaseline.py", f"/sandbox/workspace/{base_path}/GSMHardExecBaseline.py")
     session.copy_to_runtime(system_path, f"/sandbox/workspace/{system_path}")
+    session.copy_to_runtime(system_prompts_path, f"/sandbox/workspace/{system_prompts_path}")
     
     if "not found" in str(session.execute_command("pip show datasets")):
         session.execute_command("pip install datasets")
