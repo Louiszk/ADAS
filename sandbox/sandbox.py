@@ -104,7 +104,11 @@ class StreamingSandboxSession:
         return self.session.execute_command(command, workdir)
     
     def copy_to_runtime(self, src, dest):
-        return self.session.copy_to_runtime(src, dest)
+        try:
+            return self.session.copy_to_runtime(src, dest)
+        except Exception as e:
+            print(f"Exception during copying: {repr(e)}")
+            return None
     
     def copy_from_runtime(self, src, dest):
         return self.session.copy_from_runtime(src, dest)
