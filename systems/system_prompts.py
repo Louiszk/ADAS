@@ -302,6 +302,10 @@ Your output **MUST** be structured as follows:
 - Constraints
 - Success criteria
 
+## Solution Concepts
+- How to meet requirements within constraints
+- Novel but feasible ideas for implementation
+
 ## System Architecture
 - Overview using text
 - State attributes
@@ -315,6 +319,10 @@ Your output **MUST** be structured as follows:
 ## Potential Challenges
 - Risks and Pitfalls to avoid
 - Edge Case handling
+
+## Execution plan
+- Actions ordered by iterations
+- Milestones to achieve and prioritize
 
 Be thorough but concise. Focus on providing a clear roadmap that will guide the implementation phase.
 Remember that there is a maximum number of iterations to finish the system, adjust the complexity based on this.
