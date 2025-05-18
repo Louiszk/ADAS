@@ -3,29 +3,30 @@ prompts_info = """
 # For the upsert_component and system_prompt decorators, the 'function_code'/'system_prompt_code' is automatically grabbed from under the decorator.
 # This format allows for better function calls because the agent does not have to double escape special characters in the code.
 
-# These three helper prompts (agentic_system_prompt, function_signatures, decorator_tool_prompt) are an important addition to the agent prompts.
-# They provide more context for better understanding of the task and how to interact with and build the system.
+# These three helper prompts (agentic_system_prompt, function_signatures, decorator_tool_prompt) are an important addition to both agent prompts.
+# They provide more context for better understanding of the task and how to interact with and build the system. They should not be removed.
 """
 
 test_reminder = f"""
 These logs show MetaSystem0's attempt to design a "Greeting System" based on its fixed internal test.
-If MetaSystem0 consistently designs a good "Greeting System" AND you believe its capabilities are generalized, or if the iteration limit is reached, consider using `@@end_design`.
-Otherwise, your SOLE FOCUS is to IMPROVE MetaSystem0 itself:
+If the MetaSystem0 consistently designs a good "Greeting System" AND you believe its capabilities are generalized, or if the iteration limit is reached, consider using `@@end_design`.
+Otherwise, if the test threw an exception, for example, your sole focus is to improve the MetaSystem0 itself:
 
 **KEY INSTRUCTIONS**
 
 1.  **DO NOT MODIFY THE "Greeting System".** You are *not* fixing the TargetSystem that was just designed (e.g., do NOT try to upsert the `GreetingNode`).
-     Your actions (e.g., `@@upsert_component`) apply *only* to MetaSystem0's components.
+     Your actions (e.g., `@@upsert_component`) apply *only* to MetaSystem0's components, that is, the Current Code.
 
 2.  **Enhance MetaSystem0's *ABILITY TO DESIGN*.**
     - If execution threw an exception at some point, identify using the Current Code and traceback why MetaSystem0 failed.
     - If the "Greeting System" had flaws, identify why MetaSystem0 designed it poorly.
     - Example: Were there bugs in MetaSystem0's overall code? Were its prompts inadequate and lacking important context?
-    - Your actions should correct *these kinds of flaws within MetaSystem0's own code or prompts*.
+    - Your actions should correct these kinds of flaws within MetaSystem0's own code or prompts.
 
-3.  **GENERALIZE MetaSystem0's IMPROVEMENTS.** The "Greeting System" is just basic validation. Make MetaSystem0 better at designing *any* system, not just a better Greeting System.
+3.  **GENERALIZE MetaSystem0's IMPROVEMENTS.** The "Greeting System" is just basic validation. Make MetaSystem0 better at designing ANY system, not just a better Greeting System.
 
-4.  **RETEST MetaSystem0 SPARINGLY.** Only use `@@test_meta_system()` *after* you have made specific, targeted changes to MetaSystem0's components or prompts that you believe will improve its general design capabilities.
+4.  **RETEST MetaSystem0 SPARINGLY.** Only use `@@test_meta_system()` again after you have made specific, targeted changes to MetaSystem0's components or prompts that you believe will improve its general design capabilities.
+    This test result only applies to the current iteration. Do not assume that it is valid for future iterations. If you have made changes to the system, you will need to retest to obtain new results.
 """
 
 agentic_system_prompt = '''
@@ -196,7 +197,7 @@ You only have these decorators available for designing the system:
     """
         Adds system prompts or other large strings to the system_prompts file. Can be either a constant or a function.
         If a constant or function with the same name already exists in the file, it will be replaced.
-        Place the constant and/or function implementation below the decorator.
+        Place the constant and/or function implementation below the decorator. Make sure to properly escape quotes.
     """
 @@test_meta_system()
     """
@@ -318,7 +319,7 @@ Your output **MUST** be structured as follows:
 Be thorough but concise. Focus on providing a clear roadmap that will guide the implementation phase.
 Remember that there is a maximum number of iterations to finish the system, adjust the complexity based on this.
 One iteration is one of your responses. Often in the design process, mistakes are made that take multiple iterations to fix.
-This means that you should not create a super ambitious roadmap that is impossible to complete within the iteration limit.
+This means that you should avoid creating an overly ambitious roadmap which cannot be completed within the iteration limit.
 
 Do not implement any code yet. Do not use the decorators yet - just create the architectural plan, that is, the roadmap.
 '''
@@ -336,8 +337,7 @@ You are deeply familiar with advanced prompting techniques and Python programmin
 ### **IMPORTANT WORKFLOW RULES**:
 - First set the necessary state attributes, other attributes cannot be accessed
 - Always test before ending the design process
-- Only end the design process when all tests work
-- Set workflow endpoints before testing
+- Only end the design process when the roadmap is fully realized and all tests work
 - All functions should be defined with 'def', do not use lambda functions
 - The directed graph should NOT include dead ends or endless loops, where it is not possible to reach the finish point
 - The system should be fully functional, DO NOT use any placeholder logic in functions or tools
@@ -363,7 +363,7 @@ Your output **MUST ALWAYS** be structured as follows:
 ## Actions
 - Execute the necessary decorators based on your system analysis and reasoning.
 - You can execute multiple decorators, but remember to use one markdown block per decorator.
-- Carefully consider the implications of using these decorators
+- Carefully consider the implications of using these decorators.
 - Write precise, error-free code when creating or editing components.
 - Do not make assumptions about the helper code that you cannot verify.
 - Ensure all changes are grounded; the system must function correctly.

@@ -15,8 +15,8 @@ The current MetaSystem0 consists of:
 Your overall goal is to improve the **efficiency and robustness** of the MetaSystem0's design process.
 
 ### Current Problems
-1. **Superficial Testing and Premature Finalization:** The system declares success and ends the design if execution completes without errors, even if test outputs are incorrect or misaligned with the task.
-2. **Context Window Limitations and Forgetfulness:** Message trimming causes the agent to forget important prior actions, leading to redundant or detrimental decisions for the system.
+1. **Superficial Testing and Premature Finalization:** The MetaAgent writes its own tests and declares success if execution completes without errors, regardless of whether the tests are misaligned with the task or the outputs are incorrect.
+2. **Context Window Limitations and Forgetfulness:** Message trimming causes the agent to forget important prior actions, insights and current objectives, leading to redundant or detrimental decisions for the system.
 3. **Uncritical Tool Invocation** Tool calls are always executed without assessing their negative impact, even when they degrade a previously better solution or even introduce bugs, e.g. placeholder functionality.
 
 ### General Goals

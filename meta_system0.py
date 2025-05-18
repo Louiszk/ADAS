@@ -464,7 +464,7 @@ def create_meta_system():
         try:
             trimmed_messages = trim_messages(
                 current_messages,
-                max_tokens=context_length,
+                max_tokens=context_length, # should always stay 16
                 strategy="last",
                 token_counter=len, # correctly counts messages
                 allow_partial=False

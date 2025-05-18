@@ -80,7 +80,7 @@ def create_meta_system():
             )
     
             if process.returncode == 0:
-                target_system.packages = get_filtered_packages(exclude_packages) + ["langchain-core 0.3.45"]
+                target_system.packages = get_filtered_packages(exclude_packages) + ["langchain-core 0.3.59"]
                 return f"Successfully installed {package_name}"
             else:
                 return f"!!Error installing {package_name}:\n{process.stdout}"
@@ -203,6 +203,13 @@ def create_meta_system():
             action = "updated" if component_exists else "created"
             
             if component_type.lower() == "node":
+                if name in ["MetaAgent", "MetaThinker"]:
+                    if "LargeLanguageModel(" not in function_code:
+                        return f"!!Error: {name} must use a LargeLanguageModel."
+                    if name == "MetaAgent" and "meta_agent" not in function_code:
+                        return f"!!Error: {name} must include the meta_agent system prompt."
+                    if name == "MetaThinker" and "meta_thinker" not in function_code:
+                        return f"!!Error: {name} must include the meta_thinker system prompt."
                 target_system.create_node(name, description, func, function_code)
                 return f"Node '{name}' {action} successfully"
                 
@@ -240,10 +247,16 @@ def create_meta_system():
                 return f"!!Error: Invalid component type '{component_type}'. Must be 'node', 'tool', or 'router'."
                 
             if component_type.lower() == "node":
+                critical_nodes = ["MetaThinker", "MetaAgent", "EndDesign"]
+                if component_type.lower() == "node" and name in critical_nodes:
+                    return f"!!Error: Deleting the critical node '{name}' is not allowed. MetaSystem0 requires this node to function."
                 result = target_system.delete_node(name)
                 return f"Node '{name}' deleted successfully" if result else f"Failed to delete node '{name}'"
                 
             elif component_type.lower() == "tool":
+                metasystem0_core_tool_names = ["PipInstall", "SetImports", "UpsertComponent", "DeleteComponent", "AddEdge", "DeleteEdge", "TestSystem", "EndDesign"]
+                if component_type.lower() == "tool" and name in metasystem0_core_tool_names:
+                    return f"!!Error: Deleting the core tool '{name}' from MetaSystem0 is not allowed. MetaSystem0 uses this tool to design other systems."
                 result = target_system.delete_tool(name)
                 return f"Tool '{name}' deleted successfully" if result else f"Failed to delete tool '{name}'"
                     
@@ -288,7 +301,7 @@ def create_meta_system():
                 system_prompt: A system prompt that can be used to invoke large language models.
         """
         try:
-            target_system.add_system_prompt(system_prompt_code)
+            target_system.add_system_prompt(system_prompt_code, meta_meta_system = True)
             return f"System prompts file updated successfully"
         except Exception as e:
             return f"!!Error updating system prompts file: {repr(e)}"
@@ -492,10 +505,12 @@ def create_meta_system():
         full_messages = [SystemMessage(content=meta_agent)] + initial_messages + trimmed_messages + [HumanMessage(content=code_message)]
         print([getattr(last_msg, 'type', 'Unknown') for last_msg in full_messages])
         response = llm.invoke(full_messages)
+        response_content = response.content
 
-        if not hasattr(response, 'content') or not response.content:
-            response.content = "I will execute the necessary decorators."
-        response.content = f"[Iteration {iteration}]\n\n" + response.content
+        if not hasattr(response, 'content') or not response_content:
+            response_content = "I will execute the necessary decorators."
+        iteration_info = f"[Iteration {iteration}]"
+        response.content = f"{iteration_info}\n\n" + response_content if iteration_info not in response_content else response_content
         
         human_message, tool_results = llm.execute_tool_calls(response.content, function_call_type="decorator")
 
@@ -526,14 +541,15 @@ def create_meta_system():
                             test_passed_recently = True
                         break
 
-            if test_passed_recently or iteration >= 58:
+            if (test_passed_recently and iteration > 8) or iteration >= 58:
                 design_completed = True
             else:
+                if iteration <=8:
+                    replace_text = f"Error: Cannot finalize the design yet. You have only used {iteration}/60 iterations. Please try to optimize further."
+                else: 
+                    replace_text = "Error: Cannot finalize the design. Please run successful tests using @@test_meta_system first."
                 if human_message and "Ending the design process..." in human_message.content:
-                    human_message.content = human_message.content.replace(
-                        "Ending the design process...",
-                        "Error: Cannot finalize the design. Please run successful tests using @@test_meta_system first."
-                    )
+                    human_message.content = human_message.content.replace("Ending the design process...", replace_text)
     
         new_state = {"messages": updated_messages, "design_completed": design_completed}
         return new_state

@@ -273,11 +273,13 @@ class VirtualAgenticSystem:
         else:
             return f"!!Error: Function '{function_name}' not found after execution"
 
-    def add_system_prompt(self, new_code: str) -> bool:
+    def add_system_prompt(self, new_code: str, meta_meta_system: bool = False) -> bool:
         """
         Adds or updates functions and constants using AST parsing.
         If a function or constant with the same name already exists at the top level,
         it will be replaced. Preserves other existing code.
+        If meta_meta_system is True, performs additional integrity checks
+        on MetaSystem0's 'meta_agent' prompt.
         """
         dedented_new_code = textwrap.dedent(new_code).strip()
 
@@ -291,32 +293,40 @@ class VirtualAgenticSystem:
             new_ast = ast.parse(dedented_new_code)
             names_to_replace = _extract_top_level_names(new_ast)
         except SyntaxError as e:
-            raise ValueError(f"Syntax error in new system_prompt code: {e}") from e
+            raise ValueError(f"Syntax error in new system_prompt code: {e}\nMake sure to properly escape quotes inside the system prompts.") from e
 
         dedented_existing_code = textwrap.dedent(self.system_prompt_code).strip()
 
         if not dedented_existing_code:
-            self.system_prompt_code = ast.unparse(new_ast)
-            return True
+            final_ast = new_ast
+        else:
+            try:
+                existing_ast = ast.parse(dedented_existing_code)
+            except SyntaxError as e:
+                raise ValueError(f"Syntax error in existing system_prompt code: {e}") from e
+
+            transformer = RemoveDefinitionsTransformer(names_to_replace)
+            modified_existing_ast = transformer.visit(existing_ast)
+
+            if not isinstance(modified_existing_ast, ast.Module):
+                # This should ideally not happen if transformer is correct
+                raise TypeError("Internal AST transformation did not return a Module node.")
+
+            final_body = modified_existing_ast.body + new_ast.body
+            final_ast = ast.Module(body=final_body, type_ignores=[])
 
         try:
-            existing_ast = ast.parse(dedented_existing_code)
-        except SyntaxError as e:
-            raise ValueError(f"Syntax error in existing system_prompt code, cannot merge: {e}") from e
-
-        transformer = RemoveDefinitionsTransformer(names_to_replace)
-        modified_existing_ast = transformer.visit(existing_ast)
-
-        if not isinstance(modified_existing_ast, ast.Module):
-             raise TypeError("AST transformation did not return a Module node.")
-
-        final_body = modified_existing_ast.body + new_ast.body
-        final_ast = ast.Module(body=final_body, type_ignores=[])
-
-        try:
-            self.system_prompt_code = ast.unparse(final_ast)
+            prospective_final_code = ast.unparse(final_ast)
         except Exception as e:
             raise RuntimeError(f"Failed to unparse combined system_prompt code AST: {e}") from e
+
+        if meta_meta_system:
+            try:
+                self._check_prompt_integrity(prospective_final_code)
+            except ValueError as integrity_error:
+                raise integrity_error
+
+        self.system_prompt_code = prospective_final_code
 
         return True
 
@@ -445,3 +455,51 @@ class VirtualAgenticSystem:
 
                     runtime_lc_tools[t_name] = tool(runnable=t_func, name_or_callable=t_name)
         return runtime_lc_tools
+    
+    def _check_prompt_integrity(self, final_system_prompt_code: str) -> None:
+        """
+        Checks if MetaSystem0's 'meta_agent' prompt contains keywords for its essential tools.
+        Raises ValueError if the code is invalid or critical tool signatures are missing.
+        """
+        namespace = {}
+        try:
+            exec(final_system_prompt_code, {"__builtins__": __builtins__}, namespace)
+        except Exception as e:
+            raise ValueError(f"Error executing the system_prompt_code for integrity check: {repr(e)}")
+
+        if "meta_agent" not in namespace:
+            raise ValueError("Integrity Check Failed: 'meta_agent' prompt was not defined after executing the system_prompt_code.")
+
+        meta_agent_prompt_str = namespace.get("meta_agent")
+
+        if not isinstance(meta_agent_prompt_str, str):
+            raise ValueError(
+                f"Integrity Check Failed: 'meta_agent' was defined in system_prompt_code, "
+                f"but it is not a string (got type: {type(meta_agent_prompt_str)}). It must be a string prompt."
+            )
+
+        expected_tool_signatures = [
+            "@@pip_install",
+            "@@set_imports",
+            "@@upsert_component",
+            "@@delete_component",
+            "@@add_edge",
+            "@@delete_edge",
+            "@@test_system",
+            "@@end_design"
+        ]
+
+        missing_keywords = []
+        for keyword in expected_tool_signatures:
+            if keyword not in meta_agent_prompt_str:
+                missing_keywords.append(keyword)
+
+        if missing_keywords:
+            error_msg = (
+                f"Integrity Check Failed for MetaSystem0's 'meta_agent' prompt: "
+                f"The prompt is missing references to its essential tool signatures: {missing_keywords}. "
+                f"MetaSystem0's agent will not be aware of these tools. "
+                f"Ensure the 'meta_agent' prompt includes necessary tool definitions "
+                f"(e.g., by concatenating its 'function_signatures' constant which lists these tools)."
+            )
+            raise ValueError(error_msg)
