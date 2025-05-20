@@ -419,35 +419,6 @@ def create_meta_system():
     )
 
     # Create node functions
-    
-    # MetaThinker node
-    def meta_thinker_function(state: Dict[str, Any]) -> Dict[str, Any]:  
-        llm = LargeLanguageModel(temperature=0.8, wrapper="google", model_name="gemini-2.0-flash")
-        messages = state.get("messages", [])
-
-        code, prompt_code = materialize_system(target_agentic_system, output_dir=None)
-        code_message = "**Here is the Current Code:**\n" + code
-        code_message += ("\n\n**System Prompts File:**\n" + prompt_code) if prompt_code else ""
-    
-        full_messages = [SystemMessage(content=meta_thinker)] + messages + [HumanMessage(content=code_message)]
-        print("Thinking...")
-        response = llm.invoke(full_messages)
-        response.content = "[Iteration 0]\n\n" + response.content
-
-        transition_message = HumanMessage(content= "\n".join([
-            "Thank you for the detailed plan. Please implement this system design step by step.",
-            "Never deviate from the plan. This plan is now your road map."
-            ]))
-        updated_messages = messages + [response, transition_message] 
-
-        new_state = {"messages": updated_messages}
-        return new_state
-    
-    meta_system.create_node(
-        "MetaThinker", 
-        "Meta Thinker",
-        meta_thinker_function
-    )
 
     tools = {}
     # MetaAgent node
@@ -460,7 +431,7 @@ def create_meta_system():
         # Filter out empty messages to avoid 'GenerateContentRequest.contents: contents is not specified'
         messages = [msg for msg in messages if hasattr(msg, 'content') and msg.content]
         iteration = len([msg for msg in messages if isinstance(msg, AIMessage)])
-        initial_messages, current_messages = messages[:3], messages[3:]
+        initial_messages, current_messages = messages[:1], messages[1:]
         try:
             trimmed_messages = trim_messages(
                 current_messages,
@@ -540,9 +511,6 @@ def create_meta_system():
         "Terminal node for workflow completion",
         end_design_node
     )
-
-    # Create edges
-    meta_system.create_edge("MetaThinker", "MetaAgent")
     
     # Add conditional edge
     def design_completed_router(state: Dict[str, Any]) -> str:
@@ -559,7 +527,7 @@ def create_meta_system():
     )
     
     # Set entry and exit points
-    meta_system.create_edge(START, "MetaThinker")
+    meta_system.create_edge(START, "MetaAgent")
     meta_system.create_edge("EndDesign", END)
 
     materialize_system(meta_system)

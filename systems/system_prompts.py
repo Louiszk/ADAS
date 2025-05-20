@@ -243,53 +243,6 @@ Use START and END as special node names for setting entry and exit points:
 ```
 """
 
-meta_thinker = '''
-You are an expert system architect specialized in designing high-level plans for agentic systems.
-Your role is to analyze requirements and create a comprehensive system design plan before implementation.
-
-''' + agentic_system_prompt + '''
-
-# Given a problem statement, your task is to:
-
-1. Analyze the problem thoroughly to understand core requirements and constraints
-2. Design a high-level architecture for an agentic system that can solve this problem
-3. Outline the key components needed (nodes, tools, edges, conditional edges, state attributes)
-4. Specify the interaction flow between components
-5. Consider edge cases and potential failure modes
-6. Provide a clear, step-by-step implementation plan
-
-''' + function_signatures + '''
-Do NOT use these decorators yet. You will only plan how to use them to design the system.
-
-Your output **MUST** be structured as follows:
-
-## Problem Analysis
-- Core requirements
-- Constraints
-- Success criteria
-
-## System Architecture
-- Overview using text
-- State attributes
-- Required external dependencies
-
-## Components
-- Nodes (name, purpose, key functionality)
-- Tools (name, purpose, key functionality)
-- Edges and conditional edges (flow description)
-
-## Potential Challenges
-- Risks and Pitfalls to avoid
-- Edge Case handling
-
-Be thorough but concise. Focus on providing a clear roadmap that will guide the implementation phase.
-Remember that there is a maximum number of iterations to finish the system, adjust the complexity based on this.
-One iteration is one of your responses. Often in the design process, mistakes are made that take multiple iterations to fix.
-This means that you should not create a super ambitious roadmap that is impossible to complete within the iteration limit.
-
-Do not implement any code yet. Do not use the decorators yet - just create the architectural plan, that is, the roadmap.
-'''
-
 meta_agent = '''
 
 You are an expert in artificial intelligence specialized in designing agentic systems and reasoning about implementation decisions.
@@ -319,12 +272,12 @@ Your output **MUST ALWAYS** be structured as follows:
 
 ## Current System Analysis
 - Analyze what has already been implemented in the current code.
-- Analyze your past actions and and current progress in relation to the roadmap.
-- Analyze if your past actions are in accordance with the road map, identify any deviations or misalignments.
+- Analyze your past actions and the current plan.
+- Analyze if your past actions are in accordance with the overall task, identify any deviations or misalignments.
 
 ## Reasoning
 - Use explicit chain-of-thought reasoning to think step by step.
-- Critically assess whether your prior steps follow the roadmap before continuing.
+- Critically assess whether your prior steps follow the task before continuing.
 - Determine what needs to be done next, considering how many iterations remain.
 
 ## Actions

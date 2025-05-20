@@ -1,5 +1,5 @@
 # MetaSystem System Configuration
-# Total nodes: 3
+# Total nodes: 2
 # Total tools: 10
 
 # Already installed packages
@@ -389,33 +389,6 @@ def build_system():
     tools["EndDesign"] = tool(runnable=end_design, name_or_callable="EndDesign")
 
     # ===== Node Definitions =====
-    # Node: MetaThinker
-    # Description: Meta Thinker
-    def meta_thinker_function(state: Dict[str, Any]) -> Dict[str, Any]:  
-        llm = LargeLanguageModel(temperature=0.8, wrapper="google", model_name="gemini-2.0-flash")
-        messages = state.get("messages", [])
-    
-        code, prompt_code = materialize_system(target_agentic_system, output_dir=None)
-        code_message = "**Here is the Current Code:**\n" + code
-        code_message += ("\n\n**System Prompts File:**\n" + prompt_code) if prompt_code else ""
-    
-        full_messages = [SystemMessage(content=meta_thinker)] + messages + [HumanMessage(content=code_message)]
-        print("Thinking...")
-        response = llm.invoke(full_messages)
-        response.content = "[Iteration 0]\n\n" + response.content
-    
-        transition_message = HumanMessage(content= "\n".join([
-            "Thank you for the detailed plan. Please implement this system design step by step.",
-            "Never deviate from the plan. This plan is now your road map."
-            ]))
-        updated_messages = messages + [response, transition_message] 
-    
-        new_state = {"messages": updated_messages}
-        return new_state
-    
-
-    graph.add_node("MetaThinker", meta_thinker_function)
-
     # Node: MetaAgent
     # Description: Meta Agent
     def meta_agent_function(state: Dict[str, Any]) -> Dict[str, Any]:  
@@ -427,7 +400,7 @@ def build_system():
         # Filter out empty messages to avoid 'GenerateContentRequest.contents: contents is not specified'
         messages = [msg for msg in messages if hasattr(msg, 'content') and msg.content]
         iteration = len([msg for msg in messages if isinstance(msg, AIMessage)])
-        initial_messages, current_messages = messages[:3], messages[3:]
+        initial_messages, current_messages = messages[:1], messages[1:]
         try:
             trimmed_messages = trim_messages(
                 current_messages,
@@ -504,9 +477,7 @@ def build_system():
     graph.add_node("EndDesign", end_design_node)
 
     # ===== Standard Edges =====
-    graph.add_edge("MetaThinker", "MetaAgent")
-
-    graph.add_edge(START, "MetaThinker")
+    graph.add_edge(START, "MetaAgent")
 
     graph.add_edge("EndDesign", END)
 
