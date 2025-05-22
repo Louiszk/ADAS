@@ -115,26 +115,17 @@ class VirtualAgenticSystem:
     def _infer_path_map(self, function_code: str) -> dict:
         """Infer possible return values from conditional edge function using regex."""
         path_map = {}
-        known_nodes = set(self.nodes.keys())
         dedented_code = textwrap.dedent(function_code)
-        string_matches = []
         
         string_literal_pattern = r'"((?:[^"\\]|\\.)*)"|\'((?:[^\'\\]|\\.)*)\''
         for match in re.finditer(string_literal_pattern, dedented_code):
             potential_target_str = match.group(1) if match.group(1) is not None else match.group(2)
-            string_matches.append(potential_target_str)
+            if potential_target_str:
+                path_map[potential_target_str] = potential_target_str
         
         # Check for the END constant
         end_pattern = r'\bEND\b'
-        has_end = bool(re.search(end_pattern, function_code))
-        
-        # Add all potential node names to the path map
-        for node_name in string_matches:
-            if node_name in known_nodes:
-                path_map[node_name] = node_name
-        
-        # Add END if it appears in the function
-        if has_end:
+        if re.search(end_pattern, dedented_code):
             path_map["END"] = END
         
         return path_map
@@ -346,10 +337,6 @@ class VirtualAgenticSystem:
             path_map = edge_info.get("path_map", {})
             if not path_map:
                 errors.append(f"Conditional edge from source '{s}' has no correct return values. Must return a non-dynamically defined string or END.")
-            
-            for path_key, path_target in path_map.items():
-                if path_target != END and path_target not in all_defined_nodes:
-                    errors.append(f"Conditional edge target '{path_target}' (for key '{path_key}' from '{s}') is not a defined node.")
 
         # Check reachability from START
         reachable_nodes = set()
@@ -377,11 +364,11 @@ class VirtualAgenticSystem:
                 # Follow conditional edges
                 if curr in self.conditional_edges:
                     path_map = self.conditional_edges[curr].get("path_map", {})
-                    for target_node in path_map.values():
-                        if target_node not in reachable_nodes:
-                            reachable_nodes.add(target_node)
-                            if target_node != END: 
-                                q.append(target_node)
+                    for target_node_candidate in path_map.values():
+                        if target_node_candidate not in reachable_nodes and (target_node_candidate == END or target_node_candidate in all_defined_nodes):
+                            reachable_nodes.add(target_node_candidate)
+                            if target_node_candidate != END: 
+                                q.append(target_node_candidate)
             
             # Check for unreachable nodes
             for node_name in all_defined_nodes:
