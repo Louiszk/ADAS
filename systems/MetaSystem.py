@@ -422,17 +422,60 @@ def build_system():
         messages = state.get("messages", [])
     
         code, prompt_code = materialize_system(target_system, output_dir=None)
-        code_message = "**Here is the Current Code of MetaSystem0:**\n" + code
-        code_message += ("\n\n**Here is the System Prompts File of MetaSystem0:**\n" + prompt_code) if prompt_code else ""
+        code_message = f"--- Current Code of MetaSystem0 ---\n```\n{code}\n```"
+        code_message += f"\n\n--- Current System Prompts File of MetaSystem0 ---\n```\n{prompt_code}\n```" if prompt_code else ""
     
-        full_messages = [SystemMessage(content=meta_thinker)] + messages + [HumanMessage(content=code_message)]
+        # Read solution archive if it exists
+        solution_archive_content = ""
+        archive_path = "systems/solution_archive.txt"
+        if os.path.exists(archive_path):
+            try:
+                with open(archive_path, 'r') as f:
+                    archive_content = f.read().strip()
+                    if archive_content:
+                        solution_archive_content = "\n\n--- Previous Solution Concepts ---\n"
+                        solution_archive_content += "You have previously generated the following solution concepts in earlier attempts.\n"
+                        solution_archive_content += "Please try to come up with NOVEL ideas or alternatives this time, while still addressing the core optimization goals.\n"
+                        solution_archive_content += archive_content
+                        print(f"Loaded solution archive with {len(archive_content)} characters")
+            except Exception as e:
+                print(f"Warning: Could not read solution archive: {e}")
+    
+        # Combine all content for the prompt
+        full_code_message = code_message + solution_archive_content
+    
+        full_messages = [SystemMessage(content=meta_thinker)] + messages + [HumanMessage(content=full_code_message)]
         print("Thinking...")
         response = llm.invoke(full_messages)
         response.content = "[Iteration 0]\n\n# Roadmap\n" + response.content
     
+        # Extract and append Solution Concepts to archive
+        try:
+            import re
+            pattern = r'## Solution Concepts\s*\n(.*?)(?=\n##|\Z)'
+            match = re.search(pattern, response.content, re.DOTALL)
+    
+            if match:
+                concepts = match.group(1).strip()
+                if concepts:
+                    with open(archive_path, 'a') as f:
+                        system_name = target_system.system_name if target_system else "Unknown"
+                        f.write('\n-----------------------------------------\n')
+                        f.write(f'Solutions from {system_name}:\n')
+                        f.write(concepts)
+                        f.write('\n-----------------------------------------\n')
+                        f.write('\n\n')
+                    print(f"Appended new solution concepts to archive")
+                else:
+                    print("Solution Concepts section was empty")
+            else:
+                print("Could not find Solution Concepts section in response")
+        except Exception as e:
+            print(f"Warning: Could not extract/save solution concepts: {e}")
+    
         transition_message = HumanMessage(content= "\n".join([
             "Thank you for the detailed plan. Please implement this system design step by step.",
-            "Never deviate from the plan. This plan is now your roadmap."
+            "Try not to deviate from the plan. This plan is now your roadmap."
             ]))
         updated_messages = messages + [response, transition_message] 
     
@@ -464,8 +507,8 @@ def build_system():
             print(f"Error during message trimming: {e}")
     
         code, prompt_code = materialize_system(target_system, output_dir=None)
-        code_message = f"**You are now in Iteration {iteration}**\n**Here is the Current Code of MetaSystem0:**\n" + code
-        code_message += ("\n\n**Here is the System Prompts File of MetaSystem0:**\n" + prompt_code) if prompt_code else ""
+        code_message = f"**You are now in Iteration {iteration}**\n--- Current Code of MetaSystem0 ---\n```\n{code}\n```"
+        code_message += f"\n\n--- Current System Prompts File of MetaSystem0 ---\n```\n{prompt_code}\n```" if prompt_code else ""
     
         full_messages = [SystemMessage(content=meta_agent)] + initial_messages + trimmed_messages + [HumanMessage(content=code_message)]
         print([getattr(last_msg, 'type', 'Unknown') for last_msg in full_messages])
