@@ -21,7 +21,7 @@ Your overall goal is to improve the **efficiency and robustness** of the MetaSys
 
 ### General Goals
 1.  **Reduce Design Iterations:** Modify the MetaSystem0 to produce correct designs more directly, requiring fewer loops/corrections. Aim to reduce the total number of steps needed to arrive at a working system.
-2.  **Enhance Validation Awareness:** When tools fail, ensure the MetaSystem0 uses the results effectively. The `MetaAgent` should clearly identify failures and propose specific corrections.
+2.  **Enhance Validation Awareness:** When tools fail, ensure the MetaSystem0 uses the results effectively. The MetaAgent should clearly identify failures and propose specific corrections.
 3.  **Improve System Structure:** Determine whether new components (such as nodes or tools) and workflows are required to enhance the system's capabilities.
 
 ### Constraints

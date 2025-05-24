@@ -224,6 +224,7 @@ def setup_sandbox_environment(session, reinstall=False):
         ("automated_systems/MetaSystem0_system_prompts.py", "/sandbox/workspace/automated_systems/MetaSystem0_system_prompts.py"),
         ("automated_systems/MetaSystem0.pkl", "/sandbox/workspace/automated_systems/MetaSystem0.pkl"),
         ("systems/MetaSystem_system_prompts.py", "/sandbox/workspace/systems/MetaSystem_system_prompts.py"),
+        ("systems/solution_archive.txt", "/sandbox/workspace/systems/solution_archive.txt"),
         ("systems/MetaSystem.py", "/sandbox/workspace/systems/MetaSystem.py"),
         ("sandbox/run_meta.py", "/sandbox/workspace/run_meta.py"),
         ("sandbox/run_target.py", "/sandbox/workspace/run_target.py"),
