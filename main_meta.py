@@ -116,6 +116,19 @@ def main():
     except Exception as e:
         print(repr(e))
     finally:
+        print("Attempting to copy solution_archive.txt back from sandbox...")
+        sandbox_archive_path = "/sandbox/workspace/systems/solution_archive.txt"
+        host_archive_path = "systems/solution_archive.txt"
+        
+        try:
+            check_command_output = session.execute_command("ls -la /sandbox/workspace/systems")
+            if "solution_archive.txt" in str(check_command_output):
+                session.copy_from_runtime(sandbox_archive_path, host_archive_path)
+                print(f"Copied {sandbox_archive_path} from sandbox to {host_archive_path}")
+            else:
+                print(f"File {sandbox_archive_path} not found in sandbox. Not copying back.")
+        except Exception as copy_e:
+            print(f"Warning: Could not copy {sandbox_archive_path} from sandbox: {copy_e}")
         print("Session closed.")
         session.close()
 

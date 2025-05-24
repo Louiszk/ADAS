@@ -427,7 +427,7 @@ def build_system():
     
         # Read solution archive if it exists
         solution_archive_content = ""
-        archive_path = "systems/solution_archive.txt"
+        archive_path = "/sandbox/workspace/systems/solution_archive.txt"
         if os.path.exists(archive_path):
             try:
                 with open(archive_path, 'r') as f:
@@ -435,7 +435,7 @@ def build_system():
                     if archive_content:
                         solution_archive_content = "\n\n--- Previous Solution Concepts ---\n"
                         solution_archive_content += "You have previously generated the following solution concepts in earlier attempts.\n"
-                        solution_archive_content += "Please try to come up with NOVEL ideas or alternatives this time, while still addressing the core optimization goals.\n"
+                        solution_archive_content += "You can get inspired by the concepts, but try to come up with NOVEL ideas or alternatives this time, while still addressing the core optimization goals.\n"
                         solution_archive_content += archive_content
                         print(f"Loaded solution archive with {len(archive_content)} characters")
             except Exception as e:
@@ -459,12 +459,12 @@ def build_system():
                 concepts = match.group(1).strip()
                 if concepts:
                     with open(archive_path, 'a') as f:
-                        system_name = target_system.system_name if target_system else "Unknown"
+                        system_name = target_system.system_name if target_system else "X"
+                        attempt = system_name.replace("MetaSystem", "")
                         f.write('\n-----------------------------------------\n')
-                        f.write(f'Solutions from {system_name}:\n')
+                        f.write(f'Solutions from Attempt {attempt}:\n')
                         f.write(concepts)
                         f.write('\n-----------------------------------------\n')
-                        f.write('\n\n')
                     print(f"Appended new solution concepts to archive")
                 else:
                     print("Solution Concepts section was empty")
