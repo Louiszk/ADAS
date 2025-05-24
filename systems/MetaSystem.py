@@ -242,7 +242,6 @@ def build_system():
                 result = target_system.delete_tool(name)
                 return f"Tool '{name}' deleted successfully" if result else f"Failed to delete tool '{name}'"
     
-    
             elif component_type.lower() == "router":
                 result = target_system.delete_conditional_edge(name)
                 return f"Router for node '{name}' deleted successfully" if result else f"No router found for node '{name}'"
@@ -419,12 +418,12 @@ def build_system():
     # Node: MetaThinker
     # Description: Meta Thinker
     def meta_thinker_function(state: Dict[str, Any]) -> Dict[str, Any]:  
-        llm = LargeLanguageModel(temperature=0.8, wrapper="google", model_name="gemini-2.5-flash-preview-04-17")
+        llm = LargeLanguageModel(temperature=0.8, wrapper="google", model_name="gemini-2.5-pro-preview-05-06")
         messages = state.get("messages", [])
     
         code, prompt_code = materialize_system(target_system, output_dir=None)
-        code_message = "**Here is the Current Code:**\n" + code
-        code_message += ("\n\n**System Prompts File:**\n" + prompt_code) if prompt_code else ""
+        code_message = "**Here is the Current Code of MetaSystem0:**\n" + code
+        code_message += ("\n\n**Here is the System Prompts File of MetaSystem0:**\n" + prompt_code) if prompt_code else ""
     
         full_messages = [SystemMessage(content=meta_thinker)] + messages + [HumanMessage(content=code_message)]
         print("Thinking...")
@@ -446,10 +445,10 @@ def build_system():
     # Node: MetaAgent
     # Description: Meta Agent
     def meta_agent_function(state: Dict[str, Any]) -> Dict[str, Any]:  
-        llm = LargeLanguageModel(temperature=0.2, wrapper="google", model_name="gemini-2.5-flash-preview-04-17")
+        llm = LargeLanguageModel(temperature=0.2, wrapper="google", model_name="gemini-2.5-flash-preview-05-20")
         llm.bind_tools(list(tools.values()), function_call_type="decorator")
     
-        context_length = 12
+        context_length = 16
         messages = state.get("messages", [])
         iteration = len([msg for msg in messages if isinstance(msg, AIMessage)])
         initial_messages, current_messages = messages[:3], messages[3:]
@@ -465,8 +464,8 @@ def build_system():
             print(f"Error during message trimming: {e}")
     
         code, prompt_code = materialize_system(target_system, output_dir=None)
-        code_message = f"**You are now in Iteration {iteration}**\n**Here is the Current Code:**\n" + code
-        code_message += ("\n\n**System Prompts File:**\n" + prompt_code) if prompt_code else ""
+        code_message = f"**You are now in Iteration {iteration}**\n**Here is the Current Code of MetaSystem0:**\n" + code
+        code_message += ("\n\n**Here is the System Prompts File of MetaSystem0:**\n" + prompt_code) if prompt_code else ""
     
         full_messages = [SystemMessage(content=meta_agent)] + initial_messages + trimmed_messages + [HumanMessage(content=code_message)]
         print([getattr(last_msg, 'type', 'Unknown') for last_msg in full_messages])

@@ -21,12 +21,11 @@ Your overall goal is to improve the **efficiency and robustness** of the MetaSys
 
 ### General Goals
 1.  **Reduce Design Iterations:** Modify the MetaSystem0 to produce correct designs more directly, requiring fewer loops/corrections. Aim to reduce the total number of steps needed to arrive at a working system.
-2.  **Improve Generated Code Quality:** Enhance the system's ability to generate `TargetSystem` code that is less prone to errors upon the *first* attempt.
-3.  **Enhance Validation Awareness:** When tools fail, ensure the MetaSystem0 uses the results effectively. The `MetaAgent` should clearly identify failures and propose specific corrections.
-4.  **Improve System Structure:** Decide if new components and workflows are needed to improve the system's capabilities.
+2.  **Enhance Validation Awareness:** When tools fail, ensure the MetaSystem0 uses the results effectively. The `MetaAgent` should clearly identify failures and propose specific corrections.
+3.  **Improve System Structure:** Determine whether new components (such as nodes or tools) and workflows are required to enhance the system's capabilities.
 
 ### Constraints
-- Do *NOT* change the maximum iterations (currently => 58) for the target_agentic_system to end the design.
+- Do *NOT* change the maximum iterations (currently => 58) for the MetaSystem0 to end the design.
 - Do *NOT* change the maximum iterations (currently 20) for the test_system function.
 - Do *NOT* increase the context size of 16 messages.
 - Do *NOT* remove important helper functions.

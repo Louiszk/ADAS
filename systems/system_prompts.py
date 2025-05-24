@@ -4,7 +4,7 @@ prompts_info = """
 # This format allows for better function calls because the agent does not have to double escape special characters in the code.
 
 # These three helper prompts (agentic_system_prompt, function_signatures, decorator_tool_prompt) are an important addition to both agent prompts.
-# They provide more context for better understanding of the task and how to interact with and build the system. They should not be removed.
+# They provide more context for better understanding of the task and how to interact with and build the system. They should not be removed, but can be edited.
 """
 
 test_reminder = f"""
@@ -12,21 +12,21 @@ These logs show MetaSystem0's attempt to design a "Greeting System" based on its
 If the MetaSystem0 consistently designs a good "Greeting System" AND you believe its capabilities are generalized, or if the iteration limit is reached, consider using `@@end_design`.
 Otherwise, if the test threw an exception, for example, your sole focus is to improve the MetaSystem0 itself:
 
-**KEY INSTRUCTIONS**
+# KEY INSTRUCTIONS
 
-1.  **DO NOT MODIFY THE "Greeting System".** You are *not* fixing the TargetSystem that was just designed (e.g., do NOT try to upsert the `GreetingNode`).
-     Your actions (e.g., `@@upsert_component`) apply *only* to MetaSystem0's components, that is, the Current Code.
+1.  **DO NOT MODIFY THE "Greeting System".**
+    - You are *not* fixing the TargetSystem that was just designed (e.g., do NOT try to upsert the `GreetingNode`).
+    - Your actions (e.g., `@@upsert_component`) apply *only* to MetaSystem0's components, that is, the Current Code.
 
-2.  **Enhance MetaSystem0's *ABILITY TO DESIGN*.**
+2.  **Enhance MetaSystem0's ability to design.**
     - If execution threw an exception at some point, identify using the Current Code and traceback why MetaSystem0 failed.
     - If the "Greeting System" had flaws, identify why MetaSystem0 designed it poorly.
-    - Example: Were there bugs in MetaSystem0's overall code? Were its prompts inadequate and lacking important context?
-    - Your actions should correct these kinds of flaws within MetaSystem0's own code or prompts.
+    - Your actions should correct these flaws within MetaSystem0's own code or prompts.
+    - The "Greeting System" is just basic validation. Make sure MetaSystem0 is better at designing ANY system, not just a better Greeting System.
 
-3.  **GENERALIZE MetaSystem0's IMPROVEMENTS.** The "Greeting System" is just basic validation. Make MetaSystem0 better at designing ANY system, not just a better Greeting System.
-
-4.  **RETEST MetaSystem0 SPARINGLY.** Only use `@@test_meta_system()` again after you have made specific, targeted changes to MetaSystem0's components or prompts that you believe will improve its general design capabilities.
-    This test result only applies to the current iteration. Do not assume that it is valid for future iterations. If you have made changes to the system, you will need to retest to obtain new results.
+3.  **Retest MetaSystem0 SPARINGLY.**
+    - Only use `@@test_meta_system()` again after you have made specific, targeted changes to MetaSystem0's components or prompts that you believe will improve its general design capabilities.
+    - This test result only applies to the current iteration. Do not assume that it is valid for future iterations. If you have made changes to the system, you will need to retest to obtain new results.
 """
 
 agentic_system_prompt = '''
@@ -201,7 +201,7 @@ You only have these decorators available for designing the system:
     """
 @@test_meta_system()
     """
-        Executes the current MetaSystem0 with a fixed test state to validate functionality:
+        Executes the current MetaSystem0 with a fixed test state to validate basic functionality:
             state = {"messages": [HumanMessage(
                 "Design a simple system that greets the user. It should include a 'GreetingNode' using an LLM."
                 "\nThe system must be completed in no more than 16 iterations."
@@ -314,15 +314,16 @@ Your output **MUST** be structured as follows:
 ## Components
 - Nodes (name, purpose, key functionality)
 - Tools (name, purpose, key functionality)
-- Edges and conditional edges (flow description)
+- Flow description: clearly distinguish between standard edges and conditional edges (routers)
 
 ## Potential Challenges
 - Risks and Pitfalls to avoid
 - Edge Case handling
 
 ## Execution plan
-- Actions ordered by iterations
-- Milestones to achieve and prioritize
+- How to implement the Solution Concepts:
+- Actions ordered by iteration-ranges (e.g Iteration 1-5)
+- Milestones to achieve and prioritize (declaring optionals)
 
 Be thorough but concise. Focus on providing a clear roadmap that will guide the implementation phase.
 Remember that there is a maximum number of iterations to finish the system, adjust the complexity based on this.
@@ -330,6 +331,7 @@ One iteration is one of your responses. Often in the design process, mistakes ar
 This means that you should avoid creating an overly ambitious roadmap which cannot be completed within the iteration limit.
 
 Do not implement any code yet. Do not use the decorators yet - just create the architectural plan, that is, the roadmap.
+Take all the time you need to think through this carefully. The plan must be feasible and lead to a working agentic system.
 '''
 
 meta_agent = '''
@@ -359,9 +361,10 @@ Therefore, it is better to execute only a few decorators at a time and wait for 
 Your output **MUST ALWAYS** be structured as follows:
 
 ## Current System Analysis
-- Analyze what has already been implemented in the current code.
+- Analyze what has already been implemented in the current code of MetaSystem0 (the system you are optimizing).
 - Analyze your past actions and and current progress in relation to the roadmap.
 - Analyze if your past actions are in accordance with the road map, identify any deviations or misalignments.
+- If implementing some milestone proves much harder than anticipated, try an alternative approach that could still contribute to the overall goal.
 
 ## Reasoning
 - Use explicit chain-of-thought reasoning to think step by step.
